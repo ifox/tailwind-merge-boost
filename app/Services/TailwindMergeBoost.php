@@ -29,11 +29,12 @@ class TailwindMergeBoost
 
     /**
      * Class group patterns - ordered by specificity (more specific first).
+     * Includes comprehensive support for arbitrary values.
      *
      * @var array<string, string>
      */
     private static array $classGroupPatterns = [
-        // Spacing - padding (more specific first)
+        // Spacing - padding (more specific first) - includes arbitrary values
         '/^ps-/' => 'padding-s',
         '/^pe-/' => 'padding-e',
         '/^pt-/' => 'padding-t',
@@ -43,7 +44,7 @@ class TailwindMergeBoost
         '/^px-/' => 'padding-x',
         '/^py-/' => 'padding-y',
         '/^p-/' => 'padding',
-        // Spacing - margin (more specific first, handles negative values)
+        // Spacing - margin (more specific first, handles negative values and arbitrary)
         '/^-?ms-/' => 'margin-s',
         '/^-?me-/' => 'margin-e',
         '/^-?mt-/' => 'margin-t',
@@ -53,38 +54,36 @@ class TailwindMergeBoost
         '/^-?mx-/' => 'margin-x',
         '/^-?my-/' => 'margin-y',
         '/^-?m-/' => 'margin',
-        // Width/Height/Size
-        '/^w-/' => 'width',
+        // Width/Height/Size - includes arbitrary values
         '/^min-w-/' => 'min-width',
         '/^max-w-/' => 'max-width',
-        '/^h-/' => 'height',
+        '/^w-/' => 'width',
         '/^min-h-/' => 'min-height',
         '/^max-h-/' => 'max-height',
+        '/^h-/' => 'height',
         '/^size-/' => 'size',
-        // Flex
+        // Flex - includes arbitrary values
         '/^flex-/' => 'flex',
         '/^basis-/' => 'flex-basis',
         '/^grow/' => 'flex-grow',
         '/^shrink/' => 'flex-shrink',
         '/^order-/' => 'order',
-        // Grid
+        // Grid - includes arbitrary values
         '/^grid-cols-/' => 'grid-cols',
         '/^grid-rows-/' => 'grid-rows',
         '/^col-/' => 'grid-col',
         '/^row-/' => 'grid-row',
-        '/^gap-/' => 'gap',
         '/^gap-x-/' => 'gap-x',
         '/^gap-y-/' => 'gap-y',
-        // Text size (must be before text color)
+        '/^gap-/' => 'gap',
+        // Text size (must be before text color) - includes arbitrary values
         '/^text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)$/' => 'text-size',
-        // Text color (general pattern for colors)
+        // Text color (general pattern for colors) - includes arbitrary
         '/^text-/' => 'text-color',
-        // Border width (must be before border color) - border, border-0, border-2, border-4, border-8, border-[arbitrary]
+        // Border width (must be before border color) - border, border-0, border-2, border-4, border-8
         '/^border-(0|2|4|8)$/' => 'border-width',
-        '/^border-\[.+\]$/' => 'border-width',
-        // Border side widths - border-x, border-y, border-t, border-r, border-b, border-l with optional width
+        // Border side widths - border-x, border-y, border-t, border-r, border-b, border-l with width
         '/^border-[xytblr]-(0|2|4|8)$/' => 'border-side-width',
-        '/^border-[xytblr]-\[.+\]$/' => 'border-side-width',
         // Border side colors - border-t-*, border-r-*, border-b-*, border-l-*, border-x-*, border-y-* with color
         '/^border-t-/' => 'border-t-color',
         '/^border-r-/' => 'border-r-color',
@@ -92,36 +91,48 @@ class TailwindMergeBoost
         '/^border-l-/' => 'border-l-color',
         '/^border-x-/' => 'border-x-color',
         '/^border-y-/' => 'border-y-color',
-        // Border color (general)
+        // Border color (general) - includes arbitrary
         '/^border-/' => 'border-color',
-        // Ring width (must be before ring color) - ring, ring-0, ring-1, ring-2, ring-4, ring-8, ring-inset
+        // Ring width (must be before ring color) - ring, ring-0, ring-1, ring-2, ring-4, ring-8
         '/^ring-(0|1|2|4|8)$/' => 'ring-width',
-        // Ring offset
+        // Ring offset - includes arbitrary
         '/^ring-offset-/' => 'ring-offset',
-        // Ring color
+        // Ring color - includes arbitrary
         '/^ring-/' => 'ring-color',
         // Outline width (must be before outline color)
         '/^outline-(0|1|2|4|8)$/' => 'outline-width',
-        // Outline offset
+        // Outline offset - includes arbitrary
         '/^outline-offset-/' => 'outline-offset',
-        // Outline color
+        // Outline color - includes arbitrary
         '/^outline-/' => 'outline-color',
         // Background gradient (must be before bg color)
         '/^bg-gradient-/' => 'bg-gradient',
-        // Background color
+        // Background position
+        '/^bg-(top|bottom|left|right|center)$/' => 'bg-position',
+        // Background size
+        '/^bg-(auto|cover|contain)$/' => 'bg-size',
+        // Background image (none)
+        '/^bg-none$/' => 'bg-image',
+        // Background color - includes arbitrary
         '/^bg-/' => 'bg-color',
+        // Fill - includes arbitrary
         '/^fill-/' => 'fill',
-        '/^stroke-/' => 'stroke',
-        '/^shadow($|-)/' => 'shadow',
+        // Stroke width - includes arbitrary
+        '/^stroke-(0|1|2)$/' => 'stroke-width',
+        // Stroke color - includes arbitrary
+        '/^stroke-/' => 'stroke-color',
+        // Shadow - includes arbitrary
+        '/^shadow/' => 'shadow',
         '/^accent-/' => 'accent',
         '/^caret-/' => 'caret',
         '/^decoration-/' => 'decoration',
         '/^divide-/' => 'divide',
         '/^placeholder-/' => 'placeholder',
+        // Gradient - includes arbitrary
         '/^from-/' => 'gradient-from',
         '/^via-/' => 'gradient-via',
         '/^to-/' => 'gradient-to',
-        // Typography
+        // Typography - includes arbitrary values
         '/^font-/' => 'font',
         '/^leading-/' => 'leading',
         '/^tracking-/' => 'tracking',
@@ -130,51 +141,63 @@ class TailwindMergeBoost
         '/^whitespace-/' => 'whitespace',
         '/^break-/' => 'break',
         '/^hyphens-/' => 'hyphens',
-        // Border radius
+        // Border radius - includes arbitrary
         '/^rounded/' => 'rounded',
-        // Transforms
+        // Transforms - includes arbitrary
         '/^scale-/' => 'scale',
-        '/^rotate-/' => 'rotate',
-        '/^translate-/' => 'translate',
-        '/^skew-/' => 'skew',
+        '/^-?rotate-/' => 'rotate',
+        '/^-?translate-x-/' => 'translate-x',
+        '/^-?translate-y-/' => 'translate-y',
+        '/^-?skew-x-/' => 'skew-x',
+        '/^-?skew-y-/' => 'skew-y',
         '/^origin-/' => 'origin',
-        // Transitions
+        // Transitions - includes arbitrary
         '/^transition/' => 'transition',
         '/^duration-/' => 'duration',
         '/^ease-/' => 'ease',
         '/^delay-/' => 'delay',
         '/^animate-/' => 'animate',
-        // Filters
+        // Filters - includes arbitrary
         '/^blur/' => 'blur',
         '/^brightness-/' => 'brightness',
         '/^contrast-/' => 'contrast',
         '/^grayscale/' => 'grayscale',
-        '/^hue-rotate-/' => 'hue-rotate',
+        '/^-?hue-rotate-/' => 'hue-rotate',
         '/^invert/' => 'invert',
         '/^saturate-/' => 'saturate',
         '/^sepia/' => 'sepia',
         '/^drop-shadow/' => 'drop-shadow',
         '/^backdrop-/' => 'backdrop',
-        // Layout
+        // Layout - includes arbitrary
         '/^aspect-/' => 'aspect',
-        '/^columns-/' => 'columns',
+        '/^columns-\d+$/' => 'columns-count',
+        '/^columns-auto$/' => 'columns-count',
+        '/^columns-\[/' => 'columns-width',
         '/^object-/' => 'object',
+        '/^overflow-x-/' => 'overflow-x',
+        '/^overflow-y-/' => 'overflow-y',
         '/^overflow-/' => 'overflow',
+        '/^overscroll-x-/' => 'overscroll-x',
+        '/^overscroll-y-/' => 'overscroll-y',
         '/^overscroll-/' => 'overscroll',
-        '/^inset-/' => 'inset',
-        '/^top-/' => 'top',
-        '/^right-/' => 'right',
-        '/^bottom-/' => 'bottom',
-        '/^left-/' => 'left',
-        '/^start-/' => 'start',
-        '/^end-/' => 'end',
-        '/^z-/' => 'z-index',
-        // Spacing between
-        '/^space-[xy]-/' => 'space',
-        // Scroll
-        '/^scroll-/' => 'scroll',
+        '/^-?inset-x-/' => 'inset-x',
+        '/^-?inset-y-/' => 'inset-y',
+        '/^-?inset-/' => 'inset',
+        '/^-?top-/' => 'top',
+        '/^-?right-/' => 'right',
+        '/^-?bottom-/' => 'bottom',
+        '/^-?left-/' => 'left',
+        '/^-?start-/' => 'start',
+        '/^-?end-/' => 'end',
+        '/^-?z-/' => 'z-index',
+        // Spacing between - includes arbitrary
+        '/^-?space-x-/' => 'space-x',
+        '/^-?space-y-/' => 'space-y',
+        // Scroll - includes arbitrary
+        '/^scroll-m[xytblrse]?-/' => 'scroll-m',
+        '/^scroll-p[xytblrse]?-/' => 'scroll-p',
         '/^snap-/' => 'snap',
-        // Other
+        // Other - includes arbitrary
         '/^opacity-/' => 'opacity',
         '/^cursor-/' => 'cursor',
         '/^select-/' => 'select',
@@ -315,6 +338,8 @@ class TailwindMergeBoost
         'ring-inset' => 'ring-inset',
         // Touch
         'touch-pinch-zoom' => 'touch-pz',
+        // Background image
+        'bg-none' => 'bg-image',
     ];
 
     /**
@@ -337,6 +362,8 @@ class TailwindMergeBoost
         'size' => ['width', 'height'],
         'scroll-m' => ['scroll-mx', 'scroll-my', 'scroll-ms', 'scroll-me', 'scroll-mt', 'scroll-mr', 'scroll-mb', 'scroll-ml'],
         'scroll-p' => ['scroll-px', 'scroll-py', 'scroll-ps', 'scroll-pe', 'scroll-pt', 'scroll-pr', 'scroll-pb', 'scroll-pl'],
+        'bg-image' => ['bg-color'],
+        'bg-color' => ['bg-image'],
     ];
 
     /**
@@ -441,10 +468,43 @@ class TailwindMergeBoost
      */
     private function parseClass(string $class): ?array
     {
-        // Extract modifiers (responsive, hover, etc.)
-        $parts = explode(':', $class);
-        $baseClass = array_pop($parts);
-        $modifiers = $parts;
+        // Handle standalone arbitrary properties like [color:red] or hover:[color:red]
+        // These are different from utility classes with arbitrary values like ring-[#ff0000]
+        // Standalone arbitrary properties start with '[' (after any modifiers) and contain ':'
+        $bracketPos = strpos($class, '[');
+        $isArbitraryProperty = false;
+        
+        if ($bracketPos !== false) {
+            // Check if this is a standalone arbitrary property (starts with [ after modifiers)
+            // vs a utility class with arbitrary value (has a prefix before [)
+            $afterBracket = substr($class, $bracketPos);
+            // Arbitrary properties have format [property:value]
+            // Arbitrary values have format prefix-[value]
+            if (preg_match('/^\[[a-zA-Z_-]+:/', $afterBracket)) {
+                $isArbitraryProperty = true;
+            }
+        }
+        
+        if ($isArbitraryProperty) {
+            if ($bracketPos > 0) {
+                // There are modifiers before the bracket, e.g., hover:[color:red]
+                $beforeBracket = substr($class, 0, $bracketPos);
+                $baseClass = substr($class, $bracketPos);
+                
+                // Remove trailing colon from modifiers if present
+                $beforeBracket = rtrim($beforeBracket, ':');
+                $modifiers = $beforeBracket !== '' ? explode(':', $beforeBracket) : [];
+            } else {
+                // No modifiers, just the arbitrary property like [color:red]
+                $baseClass = $class;
+                $modifiers = [];
+            }
+        } else {
+            // Standard class handling - extract modifiers (responsive, hover, etc.)
+            $parts = explode(':', $class);
+            $baseClass = array_pop($parts);
+            $modifiers = $parts;
+        }
 
         // Handle important modifier
         $hasImportant = false;
@@ -489,6 +549,15 @@ class TailwindMergeBoost
             $checkClass = substr($baseClass, 1);
         }
 
+        // Handle special cases for arbitrary values that need type detection
+        if (preg_match('/^([a-z-]+)-\[(.+)\]$/', $checkClass, $matches)) {
+            $prefix = $matches[1];
+            $arbitraryValue = $matches[2];
+            
+            // Determine the group based on the prefix and arbitrary value type
+            return $this->getArbitraryClassGroup($prefix, $arbitraryValue);
+        }
+
         // Check pattern matches
         foreach (self::$classGroupPatterns as $pattern => $groupId) {
             if (preg_match($pattern, $checkClass)) {
@@ -496,12 +565,205 @@ class TailwindMergeBoost
             }
         }
 
-        // Handle arbitrary values like [property:value]
+        // Handle arbitrary properties like [property:value] or [--custom:value]
+        if (preg_match('/^\[([a-zA-Z_-]+):/', $baseClass, $matches)) {
+            // Extract the property name and use it as the group
+            return 'arbitrary-' . $matches[1];
+        }
+
+        // Handle arbitrary CSS like [color:red] or [mask-type:alpha]
         if (preg_match('/^\[.+\]$/', $baseClass)) {
             return 'arbitrary';
         }
 
         return null;
+    }
+
+    /**
+     * Get the group ID for an arbitrary value class.
+     */
+    private function getArbitraryClassGroup(string $prefix, string $arbitraryValue): ?string
+    {
+        // Determine if the arbitrary value is a color (only hex colors recognized for compatibility)
+        $isColor = $this->isArbitraryColor($arbitraryValue);
+        // Determine if the arbitrary value is a size/length
+        $isSize = $this->isArbitrarySize($arbitraryValue);
+        // Determine if the arbitrary value is a URL (for bg-image)
+        $isUrl = preg_match('/^url\s*\(/i', $arbitraryValue);
+        
+        // For utilities that can have either color or size values,
+        // only merge if we can definitively identify the type.
+        // This matches TailwindMerge v1.1.2 behavior.
+        $isKnownType = $isColor || $isSize || $isUrl;
+
+        // Map prefixes to their correct groups based on value type
+        // For utilities with ambiguous types, return a unique arbitrary group if type is unknown
+        $prefixMappings = [
+            'border' => $isSize ? 'border-width' : ($isColor ? 'border-color' : 'border-arbitrary'),
+            'border-t' => $isSize ? 'border-side-width' : ($isColor ? 'border-t-color' : 'border-t-arbitrary'),
+            'border-r' => $isSize ? 'border-side-width' : ($isColor ? 'border-r-color' : 'border-r-arbitrary'),
+            'border-b' => $isSize ? 'border-side-width' : ($isColor ? 'border-b-color' : 'border-b-arbitrary'),
+            'border-l' => $isSize ? 'border-side-width' : ($isColor ? 'border-l-color' : 'border-l-arbitrary'),
+            'border-x' => $isSize ? 'border-side-width' : ($isColor ? 'border-x-color' : 'border-x-arbitrary'),
+            'border-y' => $isSize ? 'border-side-width' : ($isColor ? 'border-y-color' : 'border-y-arbitrary'),
+            'ring' => $isSize ? 'ring-width' : ($isColor ? 'ring-color' : 'ring-arbitrary'),
+            'outline' => $isSize ? 'outline-width' : ($isColor ? 'outline-color' : 'outline-arbitrary'),
+            'stroke' => $isSize ? 'stroke-width' : ($isColor ? 'stroke-color' : 'stroke-arbitrary'),
+            'text' => $isSize ? 'text-size' : ($isColor ? 'text-color' : 'text-arbitrary'),
+            'bg' => $isUrl ? 'bg-image' : ($isColor ? 'bg-color' : 'bg-arbitrary'),
+            'p' => 'padding',
+            'pt' => 'padding-t',
+            'pr' => 'padding-r',
+            'pb' => 'padding-b',
+            'pl' => 'padding-l',
+            'px' => 'padding-x',
+            'py' => 'padding-y',
+            'ps' => 'padding-s',
+            'pe' => 'padding-e',
+            'm' => 'margin',
+            'mt' => 'margin-t',
+            'mr' => 'margin-r',
+            'mb' => 'margin-b',
+            'ml' => 'margin-l',
+            'mx' => 'margin-x',
+            'my' => 'margin-y',
+            'ms' => 'margin-s',
+            'me' => 'margin-e',
+            'w' => 'width',
+            'h' => 'height',
+            'min-w' => 'min-width',
+            'max-w' => 'max-width',
+            'min-h' => 'min-height',
+            'max-h' => 'max-height',
+            'size' => 'size',
+            'gap' => 'gap',
+            'gap-x' => 'gap-x',
+            'gap-y' => 'gap-y',
+            'rounded' => 'rounded',
+            'z' => 'z-index',
+            'top' => 'top',
+            'right' => 'right',
+            'bottom' => 'bottom',
+            'left' => 'left',
+            'inset' => 'inset',
+            'inset-x' => 'inset-x',
+            'inset-y' => 'inset-y',
+            'start' => 'start',
+            'end' => 'end',
+            'space-x' => 'space-x',
+            'space-y' => 'space-y',
+            'grid-cols' => 'grid-cols',
+            'grid-rows' => 'grid-rows',
+            'col' => 'grid-col',
+            'row' => 'grid-row',
+            'translate-x' => 'translate-x',
+            'translate-y' => 'translate-y',
+            'rotate' => 'rotate',
+            'skew-x' => 'skew-x',
+            'skew-y' => 'skew-y',
+            'scale' => 'scale',
+            'from' => 'gradient-from',
+            'via' => 'gradient-via',
+            'to' => 'gradient-to',
+            'opacity' => 'opacity',
+            'shadow' => 'shadow',
+            'blur' => 'blur',
+            'brightness' => 'brightness',
+            'contrast' => 'contrast',
+            'saturate' => 'saturate',
+            'hue-rotate' => 'hue-rotate',
+            'duration' => 'duration',
+            'delay' => 'delay',
+            'ease' => 'ease',
+            'animate' => 'animate',
+            'font' => 'font',
+            'leading' => 'leading',
+            'tracking' => 'tracking',
+            'indent' => 'indent',
+            'line-clamp' => 'line-clamp',
+            'aspect' => 'aspect',
+            'columns' => $isSize ? 'columns-width' : 'columns-count',
+            'order' => 'order',
+            'basis' => 'flex-basis',
+            'flex' => 'flex',
+            'fill' => 'fill',
+            'accent' => 'accent',
+            'caret' => 'caret',
+            'content' => 'content',
+            'cursor' => 'cursor',
+            'ring-offset' => 'ring-offset',
+            'outline-offset' => 'outline-offset',
+        ];
+
+        if (isset($prefixMappings[$prefix])) {
+            return $prefixMappings[$prefix];
+        }
+
+        // Fallback: check pattern matches with the full class
+        $fullClass = $prefix . '-[' . $arbitraryValue . ']';
+        foreach (self::$classGroupPatterns as $pattern => $groupId) {
+            if (preg_match($pattern, $fullClass)) {
+                return $groupId;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Check if an arbitrary value represents a color.
+     * This matches TailwindMerge v1.1.2 behavior which recognizes hex and rgb colors.
+     */
+    private function isArbitraryColor(string $value): bool
+    {
+        // Hex colors: #fff, #ffffff, #ffffffff
+        if (preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $value)) {
+            return true;
+        }
+
+        // RGB/RGBA colors - TailwindMerge v1.1.2 recognizes these
+        if (preg_match('/^rgba?\s*\(/i', $value)) {
+            return true;
+        }
+
+        // CSS variables - TailwindMerge treats var() as colors in color contexts
+        if (preg_match('/^var\s*\(/i', $value)) {
+            return true;
+        }
+
+        // Named colors (common ones)
+        $colorKeywords = ['transparent', 'currentColor', 'inherit', 'initial', 'unset', 'currentcolor'];
+        if (in_array($value, $colorKeywords, true)) {
+            return true;
+        }
+
+        // Note: TailwindMerge v1.1.2 doesn't recognize hsl() in arbitrary values
+        // So we don't match them here to maintain compatibility
+
+        return false;
+    }
+
+    /**
+     * Check if an arbitrary value represents a size/length.
+     */
+    private function isArbitrarySize(string $value): bool
+    {
+        // CSS length units: px, em, rem, %, vw, vh, ch, etc.
+        if (preg_match('/^-?[\d.]+\s*(px|em|rem|%|vw|vh|vmin|vmax|ch|ex|cm|mm|in|pt|pc|svh|svw|dvh|dvw|lvh|lvw)$/', $value)) {
+            return true;
+        }
+
+        // Plain numbers (like border-0, border-2)
+        if (preg_match('/^\d+$/', $value)) {
+            return true;
+        }
+
+        // calc(), min(), max(), clamp() functions typically for sizing
+        if (preg_match('/^(calc|min|max|clamp)\s*\(/', $value)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
