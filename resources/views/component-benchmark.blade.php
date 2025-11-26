@@ -12,10 +12,13 @@
         /* Contain fixed/absolute positioned elements (like modals) within preview areas */
         .component-preview {
             position: relative;
-            transform: translateZ(0);
+            isolation: isolate;
+            contain: layout;
             overflow: hidden;
         }
-        .component-preview > * {
+        .component-preview [class*="fixed"],
+        .component-preview [class*="absolute"],
+        .component-preview [class*="inset-"] {
             position: relative !important;
             inset: auto !important;
             z-index: auto !important;
