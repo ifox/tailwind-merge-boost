@@ -79,12 +79,20 @@ class TailwindMergeBoost
         '/^text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)$/' => 'text-size',
         // Text color (general pattern for colors)
         '/^text-/' => 'text-color',
-        // Border width (must be before border color) - border, border-0, border-2, border-4, border-8
+        // Border width (must be before border color) - border, border-0, border-2, border-4, border-8, border-[arbitrary]
         '/^border-(0|2|4|8)$/' => 'border-width',
-        // Border side widths
-        '/^border-[xytblr]-(0|2|4|8)$/' => 'border-width',
-        '/^border-[xytblr]$/' => 'border-width',
-        // Border color
+        '/^border-\[.+\]$/' => 'border-width',
+        // Border side widths - border-x, border-y, border-t, border-r, border-b, border-l with optional width
+        '/^border-[xytblr]-(0|2|4|8)$/' => 'border-side-width',
+        '/^border-[xytblr]-\[.+\]$/' => 'border-side-width',
+        // Border side colors - border-t-*, border-r-*, border-b-*, border-l-*, border-x-*, border-y-* with color
+        '/^border-t-/' => 'border-t-color',
+        '/^border-r-/' => 'border-r-color',
+        '/^border-b-/' => 'border-b-color',
+        '/^border-l-/' => 'border-l-color',
+        '/^border-x-/' => 'border-x-color',
+        '/^border-y-/' => 'border-y-color',
+        // Border color (general)
         '/^border-/' => 'border-color',
         // Ring width (must be before ring color) - ring, ring-0, ring-1, ring-2, ring-4, ring-8, ring-inset
         '/^ring-(0|1|2|4|8)$/' => 'ring-width',
@@ -249,12 +257,12 @@ class TailwindMergeBoost
         'container' => 'container',
         // Border width (standalone)
         'border' => 'border-width',
-        'border-t' => 'border-width',
-        'border-r' => 'border-width',
-        'border-b' => 'border-width',
-        'border-l' => 'border-width',
-        'border-x' => 'border-width',
-        'border-y' => 'border-width',
+        'border-t' => 'border-side-width',
+        'border-r' => 'border-side-width',
+        'border-b' => 'border-side-width',
+        'border-l' => 'border-side-width',
+        'border-x' => 'border-side-width',
+        'border-y' => 'border-side-width',
         // Ring width (standalone)
         'ring' => 'ring-width',
         // Outline width (standalone)
@@ -324,7 +332,8 @@ class TailwindMergeBoost
         'padding' => ['padding-x', 'padding-y', 'padding-t', 'padding-r', 'padding-b', 'padding-l', 'padding-s', 'padding-e'],
         'margin' => ['margin-x', 'margin-y', 'margin-t', 'margin-r', 'margin-b', 'margin-l', 'margin-s', 'margin-e'],
         'rounded' => ['rounded-t', 'rounded-r', 'rounded-b', 'rounded-l', 'rounded-tl', 'rounded-tr', 'rounded-br', 'rounded-bl', 'rounded-s', 'rounded-e', 'rounded-ss', 'rounded-se', 'rounded-ee', 'rounded-es'],
-        'border' => ['border-t', 'border-r', 'border-b', 'border-l', 'border-x', 'border-y', 'border-s', 'border-e'],
+        'border-width' => ['border-side-width'],
+        'border-color' => ['border-t-color', 'border-r-color', 'border-b-color', 'border-l-color', 'border-x-color', 'border-y-color'],
         'size' => ['width', 'height'],
         'scroll-m' => ['scroll-mx', 'scroll-my', 'scroll-ms', 'scroll-me', 'scroll-mt', 'scroll-mr', 'scroll-mb', 'scroll-ml'],
         'scroll-p' => ['scroll-px', 'scroll-py', 'scroll-ps', 'scroll-pe', 'scroll-pt', 'scroll-pr', 'scroll-pb', 'scroll-pl'],
