@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Component Rendering Benchmark</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Ensure Tailwind CDN classes are applied */
+        [class] { /* Force specificity */ }
+    </style>
 </head>
 <body class="bg-gray-100 min-h-screen py-8">
     <div class="max-w-7xl mx-auto px-4">
@@ -14,6 +18,9 @@
             </h1>
             <p class="text-lg text-gray-600">
                 Rendering {{ number_format($totalComponents) }} Blade components with class merging
+            </p>
+            <p class="text-sm text-gray-500 mt-2">
+                25 components × {{ $variantsPerComponent }} variants × {{ $iterations }} iterations
             </p>
         </div>
 
@@ -39,23 +46,21 @@
                     </p>
                 </div>
                 <div class="bg-purple-50 rounded-xl p-6 text-center">
-                    <p class="text-sm font-medium text-purple-600 uppercase tracking-wide">Components</p>
+                    <p class="text-sm font-medium text-purple-600 uppercase tracking-wide">Total Renders</p>
                     <p class="text-3xl font-bold text-purple-900 mt-2">{{ number_format($totalComponents) }}</p>
                 </div>
             </div>
-            <p class="text-center text-gray-500 mt-6">
-                25 UI components × {{ $iterations }} iterations = {{ number_format($totalComponents) }} component renders
-            </p>
         </div>
 
         <!-- Per-Component Breakdown -->
         <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-6">Per-Component Performance</h2>
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6">Per-Component Performance ({{ $variantsPerComponent }} variants each)</h2>
             <div class="overflow-x-auto">
                 <table class="w-full">
                     <thead>
                         <tr class="border-b-2 border-gray-200">
                             <th class="text-left py-4 px-4 font-semibold text-gray-700">Component</th>
+                            <th class="text-center py-4 px-4 font-semibold text-gray-700">Variants</th>
                             <th class="text-right py-4 px-4 font-semibold text-gray-700">TailwindMerge</th>
                             <th class="text-right py-4 px-4 font-semibold text-gray-700">TailwindMergeBoost</th>
                             <th class="text-right py-4 px-4 font-semibold text-gray-700">Speedup</th>
@@ -66,6 +71,7 @@
                         @foreach($componentResults as $name => $result)
                         <tr class="border-b border-gray-100 hover:bg-gray-50">
                             <td class="py-4 px-4 font-medium text-gray-900">{{ ucfirst($name) }}</td>
+                            <td class="py-4 px-4 text-center text-gray-600">{{ $result['variants'] }}</td>
                             <td class="py-4 px-4 text-right text-gray-600">{{ number_format($result['twm'], 3) }} ms</td>
                             <td class="py-4 px-4 text-right text-gray-600">{{ number_format($result['boost'], 3) }} ms</td>
                             <td class="py-4 px-4 text-right font-semibold {{ $result['speedup'] > 1 ? 'text-green-600' : 'text-yellow-600' }}">
@@ -89,47 +95,67 @@
             </div>
         </div>
 
-        <!-- Side by Side Comparison -->
+        <!-- Side by Side Comparison with All Variants -->
         <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-6">Component Comparison</h2>
-            <p class="text-gray-600 mb-6">All components rendered with custom class overrides to demonstrate merging behavior</p>
+            <h2 class="text-2xl font-semibold text-gray-800 mb-2">Component Comparison</h2>
+            <p class="text-gray-600 mb-6">All 25 components with 10 class variants each (simple to complex)</p>
             
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <!-- TailwindMerge Column -->
-                <div class="border-2 border-blue-200 rounded-xl p-6 bg-blue-50/50">
-                    <h3 class="text-xl font-bold text-blue-800 mb-6 flex items-center gap-2">
-                        <span class="w-3 h-3 rounded-full bg-blue-600"></span>
-                        TailwindMerge (Original)
-                    </h3>
-                    <div class="space-y-4">
-                        @foreach($components as $component)
-                        <div class="bg-white rounded-lg p-4 shadow-sm">
-                            <p class="text-xs text-gray-500 mb-2 font-mono">{{ $component['name'] }}</p>
-                            {!! $component['twm'] !!}
+            @foreach($components as $componentName => $componentData)
+            <div class="mb-12 border-b border-gray-200 pb-8 last:border-b-0 last:pb-0">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+                    {{ ucfirst($componentName) }}
+                    <span class="text-sm font-normal text-gray-500">({{ count($componentData['variants']) }} variants)</span>
+                </h3>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- TailwindMerge Column -->
+                    <div class="border-2 border-blue-200 rounded-xl p-4 bg-blue-50/50">
+                        <h4 class="text-lg font-bold text-blue-800 mb-4 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+                            TailwindMerge
+                        </h4>
+                        <div class="space-y-3">
+                            @foreach($componentData['variants'] as $variant)
+                            <div class="bg-white rounded-lg p-3 shadow-sm">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded">V{{ $variant['variant'] }}</span>
+                                    <code class="text-xs text-gray-500 truncate flex-1" title="{{ $variant['class'] }}">{{ Str::limit($variant['class'], 60) }}</code>
+                                </div>
+                                <div class="p-2 bg-gray-50 rounded border">
+                                    {!! $variant['twm'] !!}
+                                </div>
+                            </div>
+                            @endforeach
                         </div>
-                        @endforeach
                     </div>
-                </div>
 
-                <!-- TailwindMergeBoost Column -->
-                <div class="border-2 border-green-200 rounded-xl p-6 bg-green-50/50">
-                    <h3 class="text-xl font-bold text-green-800 mb-6 flex items-center gap-2">
-                        <span class="w-3 h-3 rounded-full bg-green-600"></span>
-                        TailwindMergeBoost
-                    </h3>
-                    <div class="space-y-4">
-                        @foreach($components as $component)
-                        <div class="bg-white rounded-lg p-4 shadow-sm">
-                            <p class="text-xs text-gray-500 mb-2 font-mono">{{ $component['name'] }}</p>
-                            {!! $component['boost'] !!}
+                    <!-- TailwindMergeBoost Column -->
+                    <div class="border-2 border-green-200 rounded-xl p-4 bg-green-50/50">
+                        <h4 class="text-lg font-bold text-green-800 mb-4 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-green-600"></span>
+                            TailwindMergeBoost
+                        </h4>
+                        <div class="space-y-3">
+                            @foreach($componentData['variants'] as $variant)
+                            <div class="bg-white rounded-lg p-3 shadow-sm">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">V{{ $variant['variant'] }}</span>
+                                    <code class="text-xs text-gray-500 truncate flex-1" title="{{ $variant['class'] }}">{{ Str::limit($variant['class'], 60) }}</code>
+                                </div>
+                                <div class="p-2 bg-gray-50 rounded border">
+                                    {!! $variant['boost'] !!}
+                                </div>
+                            </div>
+                            @endforeach
                         </div>
-                        @endforeach
                     </div>
                 </div>
             </div>
+            @endforeach
         </div>
 
-        <!-- Visual Comparison Chart -->
+        <!-- Performance Visualization -->
         <div class="bg-white rounded-2xl shadow-xl p-8">
             <h2 class="text-2xl font-semibold text-gray-800 mb-6">Performance Visualization</h2>
             <div class="space-y-4">

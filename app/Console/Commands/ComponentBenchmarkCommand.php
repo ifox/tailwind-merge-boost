@@ -17,8 +17,7 @@ class ComponentBenchmarkCommand extends Command
      * @var string
      */
     protected $signature = 'benchmark:components
-                            {--iterations=40 : Number of iterations per component (40 × 25 = 1000)}
-                            {--warmup=5 : Number of warmup iterations}';
+                            {--iterations=4 : Number of iterations (4 × 25 components × 10 variants = 1000)}';
 
     /**
      * The console command description.
@@ -33,24 +32,19 @@ class ComponentBenchmarkCommand extends Command
     public function handle(): int
     {
         $iterations = (int) $this->option('iterations');
-        $warmup = (int) $this->option('warmup');
         $componentConfigs = BenchmarkComponentConfig::getConfigs();
-        $totalComponents = count($componentConfigs) * $iterations;
+        $variantsPerComponent = BenchmarkComponentConfig::getVariantsPerComponent();
+        $totalComponents = count($componentConfigs) * $variantsPerComponent * $iterations;
 
         $this->info('╔════════════════════════════════════════════════════════════════════════╗');
         $this->info('║           Component Rendering Benchmark                                ║');
         $this->info('╠════════════════════════════════════════════════════════════════════════╣');
-        $this->info(sprintf('║  Components: %-8d Iterations: %-8d Total: %-8d         ║', 
-            count($componentConfigs), $iterations, $totalComponents));
+        $this->info(sprintf('║  Components: %-3d  Variants: %-3d  Iterations: %-3d  Total: %-6d     ║', 
+            count($componentConfigs), $variantsPerComponent, $iterations, $totalComponents));
         $this->info('╚════════════════════════════════════════════════════════════════════════╝');
         $this->newLine();
 
         $boost = app(TailwindMergeBoost::class);
-
-        // Warmup
-        $this->info('Warming up...');
-        $this->runWarmup($componentConfigs, $warmup);
-        $this->newLine();
 
         // Benchmark
         $this->info('Benchmarking component rendering...');
@@ -63,33 +57,10 @@ class ComponentBenchmarkCommand extends Command
     }
 
     /**
-     * Run warmup iterations.
+     * Benchmark all components with all variants.
      *
-     * @param  array<string, array<string, string>>  $componentConfigs
-     */
-    private function runWarmup(array $componentConfigs, int $warmup): void
-    {
-        $bar = $this->output->createProgressBar(count($componentConfigs) * $warmup * 2);
-        $bar->start();
-
-        for ($i = 0; $i < $warmup; $i++) {
-            foreach ($componentConfigs as $name => $config) {
-                View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => 'Test']))->render();
-                $bar->advance();
-                View::make("components.ui.{$name}", array_merge($config, ['merger' => 'boost', 'slot' => 'Test']))->render();
-                $bar->advance();
-            }
-        }
-
-        $bar->finish();
-        $this->newLine();
-    }
-
-    /**
-     * Benchmark all components.
-     *
-     * @param  array<string, array<string, string>>  $componentConfigs
-     * @return array<string, array{twm: float, boost: float, speedup: float}>
+     * @param  array<string, array<int, array<string, string>>>  $componentConfigs
+     * @return array<string, array{twm: float, boost: float, speedup: float, variants: int}>
      */
     private function benchmarkComponents(array $componentConfigs, TailwindMergeBoost $boost, int $iterations): array
     {
@@ -97,11 +68,13 @@ class ComponentBenchmarkCommand extends Command
         $bar = $this->output->createProgressBar(count($componentConfigs) * 2);
         $bar->start();
 
-        foreach ($componentConfigs as $name => $config) {
-            // TailwindMerge timing
+        foreach ($componentConfigs as $name => $variants) {
+            // TailwindMerge timing - iterate through all variants
             $twmStart = hrtime(true);
             for ($i = 0; $i < $iterations; $i++) {
-                View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => 'Content']))->render();
+                foreach ($variants as $config) {
+                    View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => 'Content']))->render();
+                }
             }
             $twmEnd = hrtime(true);
             $twmTime = ($twmEnd - $twmStart) / 1_000_000;
@@ -111,7 +84,9 @@ class ComponentBenchmarkCommand extends Command
             $boost->clearCache();
             $boostStart = hrtime(true);
             for ($i = 0; $i < $iterations; $i++) {
-                View::make("components.ui.{$name}", array_merge($config, ['merger' => 'boost', 'slot' => 'Content']))->render();
+                foreach ($variants as $config) {
+                    View::make("components.ui.{$name}", array_merge($config, ['merger' => 'boost', 'slot' => 'Content']))->render();
+                }
             }
             $boostEnd = hrtime(true);
             $boostTime = ($boostEnd - $boostStart) / 1_000_000;
@@ -121,6 +96,7 @@ class ComponentBenchmarkCommand extends Command
                 'twm' => $twmTime,
                 'boost' => $boostTime,
                 'speedup' => $twmTime / max($boostTime, 0.001),
+                'variants' => count($variants),
             ];
         }
 
@@ -133,7 +109,7 @@ class ComponentBenchmarkCommand extends Command
     /**
      * Display benchmark results.
      *
-     * @param  array<string, array{twm: float, boost: float, speedup: float}>  $results
+     * @param  array<string, array{twm: float, boost: float, speedup: float, variants: int}>  $results
      */
     private function displayResults(array $results, int $totalComponents): void
     {
@@ -150,6 +126,7 @@ class ComponentBenchmarkCommand extends Command
             $speedup = $times['speedup'];
             $tableData[] = [
                 ucfirst($name),
+                $times['variants'],
                 sprintf('%.3f ms', $times['twm']),
                 sprintf('%.3f ms', $times['boost']),
                 sprintf('%.2fx', $speedup),
@@ -161,9 +138,10 @@ class ComponentBenchmarkCommand extends Command
 
         // Add total row
         $totalSpeedup = $totalTwm / max($totalBoost, 0.001);
-        $tableData[] = ['', '', '', '', ''];
+        $tableData[] = ['', '', '', '', '', ''];
         $tableData[] = [
             '<fg=cyan>TOTAL</>',
+            '<fg=cyan>' . array_sum(array_column($results, 'variants')) . '</>',
             sprintf('<fg=cyan>%.2f ms</>', $totalTwm),
             sprintf('<fg=cyan>%.2f ms</>', $totalBoost),
             sprintf('<fg=cyan>%.2fx</>', $totalSpeedup),
@@ -171,7 +149,7 @@ class ComponentBenchmarkCommand extends Command
         ];
 
         $this->table(
-            ['Component', 'TailwindMerge', 'TailwindMergeBoost', 'Speedup', 'Winner'],
+            ['Component', 'Variants', 'TailwindMerge', 'TailwindMergeBoost', 'Speedup', 'Winner'],
             $tableData
         );
 
