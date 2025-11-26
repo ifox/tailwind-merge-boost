@@ -1,11 +1,78 @@
 <?php
 
+use App\Services\BenchmarkComponentConfig;
 use App\Services\TailwindMergeBoost;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\View;
 use TailwindMerge\Laravel\Facades\TailwindMerge;
 
 Route::get('/', function () {
     return view('welcome');
+});
+
+Route::get('/component-benchmark', function () {
+    $iterations = 40; // 40 iterations × 25 components = 1000 component renders
+    $boost = app(TailwindMergeBoost::class);
+    
+    // Get component configurations from shared config
+    $componentConfigs = BenchmarkComponentConfig::getConfigs();
+    
+    $componentResults = [];
+    $components = [];
+    
+    // Warmup
+    foreach ($componentConfigs as $name => $config) {
+        View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => 'Test']))->render();
+        View::make("components.ui.{$name}", array_merge($config, ['merger' => 'boost', 'slot' => 'Test']))->render();
+    }
+    
+    // Benchmark each component
+    foreach ($componentConfigs as $name => $config) {
+        // TailwindMerge timing
+        $twmStart = hrtime(true);
+        for ($i = 0; $i < $iterations; $i++) {
+            View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => 'Content']))->render();
+        }
+        $twmEnd = hrtime(true);
+        $twmTime = ($twmEnd - $twmStart) / 1_000_000;
+        
+        // TailwindMergeBoost timing
+        $boost->clearCache();
+        $boostStart = hrtime(true);
+        for ($i = 0; $i < $iterations; $i++) {
+            View::make("components.ui.{$name}", array_merge($config, ['merger' => 'boost', 'slot' => 'Content']))->render();
+        }
+        $boostEnd = hrtime(true);
+        $boostTime = ($boostEnd - $boostStart) / 1_000_000;
+        
+        $componentResults[$name] = [
+            'twm' => $twmTime,
+            'boost' => $boostTime,
+            'speedup' => $twmTime / max($boostTime, 0.001),
+        ];
+        
+        // Render one of each for display
+        $components[] = [
+            'name' => $name,
+            'twm' => View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => ucfirst($name)]))->render(),
+            'boost' => View::make("components.ui.{$name}", array_merge($config, ['merger' => 'boost', 'slot' => ucfirst($name)]))->render(),
+        ];
+    }
+    
+    // Calculate totals
+    $twmTime = array_sum(array_column($componentResults, 'twm'));
+    $boostTime = array_sum(array_column($componentResults, 'boost'));
+    $totalComponents = count($componentConfigs) * $iterations;
+    
+    return view('component-benchmark', [
+        'componentResults' => $componentResults,
+        'components' => $components,
+        'twmTime' => $twmTime,
+        'boostTime' => $boostTime,
+        'speedup' => $twmTime / max($boostTime, 0.001),
+        'totalComponents' => $totalComponents,
+        'iterations' => $iterations,
+    ]);
 });
 
 Route::get('/benchmark', function () {
