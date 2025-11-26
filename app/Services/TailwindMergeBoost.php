@@ -75,12 +75,33 @@ class TailwindMergeBoost
         '/^gap-/' => 'gap',
         '/^gap-x-/' => 'gap-x',
         '/^gap-y-/' => 'gap-y',
-        // Colors
-        '/^bg-/' => 'bg',
-        '/^text-/' => 'text',
-        '/^border-/' => 'border',
-        '/^ring-/' => 'ring',
-        '/^outline-/' => 'outline',
+        // Text size (must be before text color)
+        '/^text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)$/' => 'text-size',
+        // Text color (general pattern for colors)
+        '/^text-/' => 'text-color',
+        // Border width (must be before border color) - border, border-0, border-2, border-4, border-8
+        '/^border-(0|2|4|8)$/' => 'border-width',
+        // Border side widths
+        '/^border-[xytblr]-(0|2|4|8)$/' => 'border-width',
+        '/^border-[xytblr]$/' => 'border-width',
+        // Border color
+        '/^border-/' => 'border-color',
+        // Ring width (must be before ring color) - ring, ring-0, ring-1, ring-2, ring-4, ring-8, ring-inset
+        '/^ring-(0|1|2|4|8)$/' => 'ring-width',
+        // Ring offset
+        '/^ring-offset-/' => 'ring-offset',
+        // Ring color
+        '/^ring-/' => 'ring-color',
+        // Outline width (must be before outline color)
+        '/^outline-(0|1|2|4|8)$/' => 'outline-width',
+        // Outline offset
+        '/^outline-offset-/' => 'outline-offset',
+        // Outline color
+        '/^outline-/' => 'outline-color',
+        // Background gradient (must be before bg color)
+        '/^bg-gradient-/' => 'bg-gradient',
+        // Background color
+        '/^bg-/' => 'bg-color',
         '/^fill-/' => 'fill',
         '/^stroke-/' => 'stroke',
         '/^shadow($|-)/' => 'shadow',
@@ -94,7 +115,6 @@ class TailwindMergeBoost
         '/^to-/' => 'gradient-to',
         // Typography
         '/^font-/' => 'font',
-        '/^text-/' => 'text',
         '/^leading-/' => 'leading',
         '/^tracking-/' => 'tracking',
         '/^indent-/' => 'indent',
@@ -227,6 +247,19 @@ class TailwindMergeBoost
         'box-decoration-clone' => 'box-decoration',
         // Container
         'container' => 'container',
+        // Border width (standalone)
+        'border' => 'border-width',
+        'border-t' => 'border-width',
+        'border-r' => 'border-width',
+        'border-b' => 'border-width',
+        'border-l' => 'border-width',
+        'border-x' => 'border-width',
+        'border-y' => 'border-width',
+        // Ring width (standalone)
+        'ring' => 'ring-width',
+        // Outline width (standalone)
+        'outline' => 'outline-width',
+        'outline-none' => 'outline-width',
         // Font style
         'italic' => 'font-style',
         'not-italic' => 'font-style',
