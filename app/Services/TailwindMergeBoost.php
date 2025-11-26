@@ -467,7 +467,12 @@ class TailwindMergeBoost
      */
     private function getCacheKey(string $input): string
     {
-        return hash('xxh3', $input);
+        // Use xxh128 if available (faster), otherwise fall back to md5
+        if (in_array('xxh128', hash_algos(), true)) {
+            return hash('xxh128', $input);
+        }
+
+        return md5($input);
     }
 
     /**
@@ -476,8 +481,12 @@ class TailwindMergeBoost
     private function storeInCache(string $key, string $value): void
     {
         if (count($this->classGroupCache) >= $this->cacheSize) {
-            // Remove oldest entries (simple FIFO)
-            $this->classGroupCache = array_slice($this->classGroupCache, (int) ($this->cacheSize / 2), null, true);
+            // Remove first half of entries using array_keys for better performance
+            $keys = array_keys($this->classGroupCache);
+            $keysToRemove = array_slice($keys, 0, (int) ($this->cacheSize / 2));
+            foreach ($keysToRemove as $keyToRemove) {
+                unset($this->classGroupCache[$keyToRemove]);
+            }
         }
 
         $this->classGroupCache[$key] = $value;
