@@ -8,6 +8,18 @@
     <style>
         /* Ensure Tailwind CDN classes are applied */
         [class] { /* Force specificity */ }
+        
+        /* Contain fixed/absolute positioned elements (like modals) within preview areas */
+        .component-preview {
+            position: relative;
+            transform: translateZ(0);
+            overflow: hidden;
+        }
+        .component-preview > * {
+            position: relative !important;
+            inset: auto !important;
+            z-index: auto !important;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen py-8">
@@ -122,7 +134,7 @@
                                     <span class="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded">V{{ $variant['variant'] }}</span>
                                     <code class="text-xs text-gray-500 truncate flex-1" title="{{ $variant['class'] }}">{{ Str::limit($variant['class'], 60) }}</code>
                                 </div>
-                                <div class="p-2 bg-gray-50 rounded border">
+                                <div class="p-2 bg-gray-50 rounded border component-preview">
                                     {!! $variant['twm'] !!}
                                 </div>
                             </div>
@@ -143,7 +155,7 @@
                                     <span class="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">V{{ $variant['variant'] }}</span>
                                     <code class="text-xs text-gray-500 truncate flex-1" title="{{ $variant['class'] }}">{{ Str::limit($variant['class'], 60) }}</code>
                                 </div>
-                                <div class="p-2 bg-gray-50 rounded border">
+                                <div class="p-2 bg-gray-50 rounded border component-preview">
                                     {!! $variant['boost'] !!}
                                 </div>
                             </div>
