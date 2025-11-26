@@ -747,14 +747,15 @@ describe('arbitrary values - colors', function () {
     });
 
     it('merges arbitrary ring colors', function () {
-        // Note: TailwindMerge v1.1.2 doesn't recognize HSL in arbitrary values as colors
-        // So both classes are kept. Our implementation matches this behavior.
+        // Edge case: TailwindMerge v1.1.2 doesn't recognize HSL format in arbitrary values.
+        // This test verifies that our implementation maintains compatibility with this behavior.
+        // HSL colors like ring-[hsl(200,100%,50%)] are not merged with ring-blue-500.
         $input = 'ring-blue-500 ring-[hsl(200,100%,50%)]';
 
         $twmResult = TailwindMerge::merge($input);
         $boostResult = $this->boost->merge($input);
 
-        // Both keep both classes since HSL isn't recognized as a color
+        // Verify our implementation matches TailwindMerge v1.1.2 behavior
         expect($boostResult)->toBe($twmResult);
     });
 

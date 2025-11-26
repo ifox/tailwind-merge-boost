@@ -28,6 +28,18 @@ class TailwindMergeBoost
     private int $cacheSize = 500;
 
     /**
+     * Pre-compiled regex patterns for performance.
+     */
+    private const SIZE_PATTERN = '/^-?[\d.]+\s*(px|em|rem|%|vw|vh|vmin|vmax|ch|ex|cm|mm|in|pt|pc|svh|svw|dvh|dvw|lvh|lvw)$/';
+    private const HEX_COLOR_PATTERN = '/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/';
+    private const RGB_PATTERN = '/^rgba?\s*\(/i';
+    private const VAR_PATTERN = '/^var\s*\(/i';
+    private const URL_PATTERN = '/^url\s*\(/i';
+    private const CALC_PATTERN = '/^(calc|min|max|clamp)\s*\(/';
+    private const NUMBER_PATTERN = '/^\d+$/';
+    private const ARBITRARY_PROPERTY_PATTERN = '/^\[[a-zA-Z_-]+:/';
+
+    /**
      * Class group patterns - ordered by specificity (more specific first).
      * Includes comprehensive support for arbitrary values.
      *
@@ -480,7 +492,7 @@ class TailwindMergeBoost
             $afterBracket = substr($class, $bracketPos);
             // Arbitrary properties have format [property:value]
             // Arbitrary values have format prefix-[value]
-            if (preg_match('/^\[[a-zA-Z_-]+:/', $afterBracket)) {
+            if (preg_match(self::ARBITRARY_PROPERTY_PATTERN, $afterBracket)) {
                 $isArbitraryProperty = true;
             }
         }
@@ -589,12 +601,11 @@ class TailwindMergeBoost
         // Determine if the arbitrary value is a size/length
         $isSize = $this->isArbitrarySize($arbitraryValue);
         // Determine if the arbitrary value is a URL (for bg-image)
-        $isUrl = preg_match('/^url\s*\(/i', $arbitraryValue);
+        $isUrl = (bool) preg_match(self::URL_PATTERN, $arbitraryValue);
         
         // For utilities that can have either color or size values,
         // only merge if we can definitively identify the type.
         // This matches TailwindMerge v1.1.2 behavior.
-        $isKnownType = $isColor || $isSize || $isUrl;
 
         // Map prefixes to their correct groups based on value type
         // For utilities with ambiguous types, return a unique arbitrary group if type is unknown
@@ -713,21 +724,22 @@ class TailwindMergeBoost
     /**
      * Check if an arbitrary value represents a color.
      * This matches TailwindMerge v1.1.2 behavior which recognizes hex and rgb colors.
+     * Uses pre-compiled regex patterns for better performance.
      */
     private function isArbitraryColor(string $value): bool
     {
         // Hex colors: #fff, #ffffff, #ffffffff
-        if (preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $value)) {
+        if (preg_match(self::HEX_COLOR_PATTERN, $value)) {
             return true;
         }
 
         // RGB/RGBA colors - TailwindMerge v1.1.2 recognizes these
-        if (preg_match('/^rgba?\s*\(/i', $value)) {
+        if (preg_match(self::RGB_PATTERN, $value)) {
             return true;
         }
 
         // CSS variables - TailwindMerge treats var() as colors in color contexts
-        if (preg_match('/^var\s*\(/i', $value)) {
+        if (preg_match(self::VAR_PATTERN, $value)) {
             return true;
         }
 
@@ -745,21 +757,22 @@ class TailwindMergeBoost
 
     /**
      * Check if an arbitrary value represents a size/length.
+     * Uses pre-compiled regex patterns for better performance.
      */
     private function isArbitrarySize(string $value): bool
     {
         // CSS length units: px, em, rem, %, vw, vh, ch, etc.
-        if (preg_match('/^-?[\d.]+\s*(px|em|rem|%|vw|vh|vmin|vmax|ch|ex|cm|mm|in|pt|pc|svh|svw|dvh|dvw|lvh|lvw)$/', $value)) {
+        if (preg_match(self::SIZE_PATTERN, $value)) {
             return true;
         }
 
         // Plain numbers (like border-0, border-2)
-        if (preg_match('/^\d+$/', $value)) {
+        if (preg_match(self::NUMBER_PATTERN, $value)) {
             return true;
         }
 
         // calc(), min(), max(), clamp() functions typically for sizing
-        if (preg_match('/^(calc|min|max|clamp)\s*\(/', $value)) {
+        if (preg_match(self::CALC_PATTERN, $value)) {
             return true;
         }
 
