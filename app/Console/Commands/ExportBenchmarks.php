@@ -239,6 +239,8 @@ class ExportBenchmarks extends Command
      */
     private function createIndexPage(string $outputDir): void
     {
+        $exportedAt = now()->format('F j, Y \a\t g:i A T');
+        
         $html = <<<HTML
 <!DOCTYPE html>
 <html lang="en">
@@ -274,22 +276,12 @@ class ExportBenchmarks extends Command
         </div>
         
         <div class="mt-12 text-center text-gray-500">
-            <p>Generated on <span id="date"></span></p>
+            <p>Generated on {$exportedAt}</p>
             <p class="mt-2">
                 <a href="https://github.com/ifox/tailwind-merge-boost" class="text-blue-600 hover:underline">View on GitHub</a>
             </p>
         </div>
     </div>
-    
-    <script>
-        document.getElementById('date').textContent = new Date().toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    </script>
 </body>
 </html>
 HTML;
