@@ -55,8 +55,38 @@
                 </div>
             </div>
             <p class="text-center text-gray-500 mt-6">
-                Based on {{ number_format($iterations) }} iterations per test case
+                Based on {{ number_format($iterations) }} iterations × {{ number_format($repeatsPerCase) }} repeats per test case
             </p>
+        </div>
+
+        <!-- Cache Statistics -->
+        <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6">Cache Statistics</h2>
+            <p class="text-gray-600 mb-4">Each input is repeated {{ number_format($repeatsPerCase) }} times per iteration to demonstrate memoization benefits.</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div class="bg-gray-50 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-4">Total Merge Calls</h3>
+                    <p class="text-3xl font-bold text-gray-900">{{ number_format($totalCacheStats['totalCalls']) }}</p>
+                </div>
+                <div class="bg-purple-50 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-purple-700 mb-4">TailwindMergeOnce</h3>
+                    <div class="space-y-2">
+                        <p class="text-sm text-purple-600">Merge calls: <span class="font-bold">{{ number_format($totalCacheStats['onceMergeCalls']) }}</span></p>
+                        <p class="text-sm text-purple-600">Actual processing: <span class="font-bold">{{ number_format($totalCacheStats['onceActualCalls']) }}</span></p>
+                        <p class="text-sm text-purple-600">Cache hits: <span class="font-bold text-purple-800">{{ number_format($totalCacheStats['onceCacheHits']) }}</span></p>
+                        <p class="text-sm text-purple-800 font-semibold">Hit rate: {{ number_format(($totalCacheStats['onceCacheHits'] / max($totalCacheStats['onceMergeCalls'], 1)) * 100, 1) }}%</p>
+                    </div>
+                </div>
+                <div class="bg-green-50 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-green-700 mb-4">TailwindMergeBoost</h3>
+                    <div class="space-y-2">
+                        <p class="text-sm text-green-600">Merge calls: <span class="font-bold">{{ number_format($totalCacheStats['boostMergeCalls']) }}</span></p>
+                        <p class="text-sm text-green-600">Cache stores: <span class="font-bold">{{ number_format($totalCacheStats['boostCacheStores']) }}</span></p>
+                        <p class="text-sm text-green-600">Cache hits: <span class="font-bold text-green-800">{{ number_format($totalCacheStats['boostCacheHits']) }}</span></p>
+                        <p class="text-sm text-green-800 font-semibold">Hit rate: {{ number_format(($totalCacheStats['boostCacheHits'] / max($totalCacheStats['boostMergeCalls'], 1)) * 100, 1) }}%</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Results Table -->
