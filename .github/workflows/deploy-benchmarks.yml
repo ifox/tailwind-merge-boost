@@ -50,6 +50,9 @@ jobs:
           touch database/database.sqlite
           php artisan migrate --force
 
+      - name: Run Tests
+        run: php artisan test
+
       - name: Export Benchmarks
         run: php artisan benchmark:export --output=_site
 
