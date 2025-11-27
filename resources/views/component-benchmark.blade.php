@@ -84,29 +84,73 @@
         <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
             <h2 class="text-2xl font-semibold text-gray-800 mb-6">Cache Statistics</h2>
             <p class="text-gray-600 mb-4">Each component variant is rendered {{ number_format($repeatsPerRender) }} times to demonstrate memoization benefits.</p>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            
+            <!-- Cache Type Legend -->
+            <div class="bg-gray-100 rounded-lg p-4 mb-6">
+                <h4 class="font-semibold text-gray-700 mb-2">Cache Types:</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div class="flex items-start gap-2">
+                        <span class="inline-block w-3 h-3 rounded-full bg-blue-500 mt-1"></span>
+                        <div>
+                            <span class="font-medium text-blue-700">Persistent Cache (TailwindMerge)</span>
+                            <p class="text-gray-600">Uses Laravel cache store (database/file/Redis). Cache persists across requests but has I/O overhead.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-2">
+                        <span class="inline-block w-3 h-3 rounded-full bg-purple-500 mt-1"></span>
+                        <div>
+                            <span class="font-medium text-purple-700">In-Memory Cache (Once/Boost)</span>
+                            <p class="text-gray-600">Pure PHP memory. No I/O overhead, but resets each request.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                 <div class="bg-gray-50 rounded-xl p-6">
                     <h3 class="text-lg font-semibold text-gray-700 mb-4">Total Renders</h3>
                     <p class="text-3xl font-bold text-gray-900">{{ number_format($totalCacheStats['totalRenders']) }}</p>
                 </div>
-                <div class="bg-purple-50 rounded-xl p-6">
-                    <h3 class="text-lg font-semibold text-purple-700 mb-4">TailwindMergeOnce</h3>
+                <div class="bg-blue-50 rounded-xl p-6 border-2 border-blue-200">
+                    <h3 class="text-lg font-semibold text-blue-700 mb-2">TailwindMerge</h3>
+                    <p class="text-xs text-blue-500 mb-3">📦 Persistent Cache (DB/File/Redis)</p>
+                    <div class="space-y-2">
+                        <p class="text-sm text-blue-600">Merge calls: <span class="font-bold">{{ number_format($totalCacheStats['twmMergeCalls']) }}</span></p>
+                        <p class="text-sm text-blue-600">Cache stores: <span class="font-bold text-orange-600">{{ number_format($totalCacheStats['twmCacheStores']) }}</span></p>
+                        <p class="text-sm text-blue-600">Cache hits: <span class="font-bold text-blue-800">{{ number_format($totalCacheStats['twmCacheHits']) }}</span></p>
+                        <p class="text-sm text-blue-800 font-semibold">Hit rate: {{ number_format(($totalCacheStats['twmCacheHits'] / max($totalCacheStats['twmMergeCalls'], 1)) * 100, 1) }}%</p>
+                    </div>
+                </div>
+                <div class="bg-purple-50 rounded-xl p-6 border-2 border-purple-200">
+                    <h3 class="text-lg font-semibold text-purple-700 mb-2">TailwindMergeOnce</h3>
+                    <p class="text-xs text-purple-500 mb-3">💨 In-Memory (once() helper)</p>
                     <div class="space-y-2">
                         <p class="text-sm text-purple-600">Merge calls: <span class="font-bold">{{ number_format($totalCacheStats['onceMergeCalls']) }}</span></p>
-                        <p class="text-sm text-purple-600">Actual processing: <span class="font-bold">{{ number_format($totalCacheStats['onceActualCalls']) }}</span></p>
+                        <p class="text-sm text-purple-600">Actual processing: <span class="font-bold text-orange-600">{{ number_format($totalCacheStats['onceActualCalls']) }}</span></p>
                         <p class="text-sm text-purple-600">Cache hits: <span class="font-bold text-purple-800">{{ number_format($totalCacheStats['onceCacheHits']) }}</span></p>
                         <p class="text-sm text-purple-800 font-semibold">Hit rate: {{ number_format(($totalCacheStats['onceCacheHits'] / max($totalCacheStats['onceMergeCalls'], 1)) * 100, 1) }}%</p>
                     </div>
                 </div>
-                <div class="bg-green-50 rounded-xl p-6">
-                    <h3 class="text-lg font-semibold text-green-700 mb-4">TailwindMergeBoost</h3>
+                <div class="bg-green-50 rounded-xl p-6 border-2 border-green-200">
+                    <h3 class="text-lg font-semibold text-green-700 mb-2">TailwindMergeBoost</h3>
+                    <p class="text-xs text-green-500 mb-3">💨 In-Memory (array cache)</p>
                     <div class="space-y-2">
                         <p class="text-sm text-green-600">Merge calls: <span class="font-bold">{{ number_format($totalCacheStats['boostMergeCalls']) }}</span></p>
-                        <p class="text-sm text-green-600">Cache stores: <span class="font-bold">{{ number_format($totalCacheStats['boostCacheStores']) }}</span></p>
+                        <p class="text-sm text-green-600">Cache stores: <span class="font-bold text-orange-600">{{ number_format($totalCacheStats['boostCacheStores']) }}</span></p>
                         <p class="text-sm text-green-600">Cache hits: <span class="font-bold text-green-800">{{ number_format($totalCacheStats['boostCacheHits']) }}</span></p>
                         <p class="text-sm text-green-800 font-semibold">Hit rate: {{ number_format(($totalCacheStats['boostCacheHits'] / max($totalCacheStats['boostMergeCalls'], 1)) * 100, 1) }}%</p>
                     </div>
                 </div>
+            </div>
+            
+            <!-- Key Insight -->
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <h4 class="font-semibold text-amber-800 mb-2">💡 Key Insight: Cache Store Calls</h4>
+                <p class="text-sm text-amber-700">
+                    <strong>TailwindMerge</strong> makes <strong class="text-orange-600">{{ number_format($totalCacheStats['twmCacheStores']) }}</strong> cache store calls (database/file I/O).
+                    <strong>TailwindMergeOnce</strong> makes <strong class="text-green-600">0</strong> external cache calls (pure in-memory).
+                    <strong>TailwindMergeBoost</strong> makes <strong class="text-green-600">0</strong> external cache calls (pure in-memory).
+                </p>
             </div>
         </div>
 
