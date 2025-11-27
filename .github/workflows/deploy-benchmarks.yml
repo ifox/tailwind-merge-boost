@@ -162,15 +162,17 @@ jobs:
               comment.body.includes('📊 Benchmark Preview')
             );
             
-            const body = `## 📊 Benchmark Preview
-
-            The benchmarks for this PR have been deployed to GitHub Pages.
-            
-            🔗 **Preview URL:** ${previewUrl}
-            
-            > **Note:** Since GitHub Pages only supports a single deployment, this preview replaces the previous deployment. The main branch will be redeployed when this PR is merged or closed.
-            
-            *Last updated: ${new Date().toISOString()}*`;
+            const body = [
+              '## 📊 Benchmark Preview',
+              '',
+              'The benchmarks for this PR have been deployed to GitHub Pages.',
+              '',
+              `🔗 **Preview URL:** ${previewUrl}`,
+              '',
+              '> **Note:** Since GitHub Pages only supports a single deployment, this preview replaces the previous deployment. The main branch will be redeployed when this PR is merged or closed.',
+              '',
+              `*Last updated: ${new Date().toISOString()}*`
+            ].join('\n');
             
             if (botComment) {
               await github.rest.issues.updateComment({
