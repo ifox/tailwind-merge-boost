@@ -2,9 +2,12 @@
 
 use App\Services\BenchmarkComponentConfig;
 use App\Services\TailwindMergeBoost;
+use App\Services\TailwindMergeOnce;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\View;
+use TailwindMerge\Contracts\TailwindMergeContract;
 use TailwindMerge\Laravel\Facades\TailwindMerge;
+use TailwindMerge\Support\Config;
 
 Route::get('/', function () {
     return view('welcome');
@@ -13,6 +16,10 @@ Route::get('/', function () {
 Route::get('/component-benchmark', function () {
     $iterations = 4; // 4 iterations × 25 components × 10 variants = 1000 component renders
     $boost = app(TailwindMergeBoost::class);
+    
+    // Create TailwindMergeOnce instance
+    Config::setAdditionalConfig(config('tailwind-merge', []));
+    $once = new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store());
     
     // Get component configurations from shared config (now with 10 variants each)
     $componentConfigs = BenchmarkComponentConfig::getConfigs();
@@ -32,6 +39,18 @@ Route::get('/component-benchmark', function () {
         $twmEnd = hrtime(true);
         $twmTime = ($twmEnd - $twmStart) / 1_000_000;
         
+        // TailwindMergeOnce timing (bind fresh instance for each component)
+        app()->singleton(TailwindMergeContract::class, fn () => new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store()));
+        $onceStart = hrtime(true);
+        for ($i = 0; $i < $iterations; $i++) {
+            foreach ($variants as $config) {
+                View::make("components.ui.{$name}", array_merge($config, ['merger' => 'once', 'slot' => 'Content']))->render();
+            }
+        }
+        $onceEnd = hrtime(true);
+        $onceTime = ($onceEnd - $onceStart) / 1_000_000;
+        app()->forgetInstance(TailwindMergeContract::class);
+        
         // TailwindMergeBoost timing
         $boost->clearCache();
         $boostStart = hrtime(true);
@@ -45,21 +64,26 @@ Route::get('/component-benchmark', function () {
         
         $componentResults[$name] = [
             'twm' => $twmTime,
+            'once' => $onceTime,
             'boost' => $boostTime,
-            'speedup' => $twmTime / max($boostTime, 0.001),
+            'onceSpeedup' => $twmTime / max($onceTime, 0.001),
+            'boostSpeedup' => $twmTime / max($boostTime, 0.001),
             'variants' => count($variants),
         ];
         
         // Render all 10 variants of each component for display
+        app()->singleton(TailwindMergeContract::class, fn () => new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store()));
         $componentVariants = [];
         foreach ($variants as $index => $config) {
             $componentVariants[] = [
                 'variant' => $index + 1,
                 'class' => $config['class'],
                 'twm' => View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => ucfirst($name)]))->render(),
+                'once' => View::make("components.ui.{$name}", array_merge($config, ['merger' => 'once', 'slot' => ucfirst($name)]))->render(),
                 'boost' => View::make("components.ui.{$name}", array_merge($config, ['merger' => 'boost', 'slot' => ucfirst($name)]))->render(),
             ];
         }
+        app()->forgetInstance(TailwindMergeContract::class);
         
         $components[$name] = [
             'name' => $name,
@@ -69,6 +93,7 @@ Route::get('/component-benchmark', function () {
     
     // Calculate totals
     $twmTime = array_sum(array_column($componentResults, 'twm'));
+    $onceTime = array_sum(array_column($componentResults, 'once'));
     $boostTime = array_sum(array_column($componentResults, 'boost'));
     $totalComponents = count($componentConfigs) * BenchmarkComponentConfig::getVariantsPerComponent() * $iterations;
     
@@ -76,8 +101,10 @@ Route::get('/component-benchmark', function () {
         'componentResults' => $componentResults,
         'components' => $components,
         'twmTime' => $twmTime,
+        'onceTime' => $onceTime,
         'boostTime' => $boostTime,
-        'speedup' => $twmTime / max($boostTime, 0.001),
+        'onceSpeedup' => $twmTime / max($onceTime, 0.001),
+        'boostSpeedup' => $twmTime / max($boostTime, 0.001),
         'totalComponents' => $totalComponents,
         'iterations' => $iterations,
         'variantsPerComponent' => BenchmarkComponentConfig::getVariantsPerComponent(),
@@ -108,12 +135,18 @@ Route::get('/benchmark', function () {
 
     $iterations = 500;
     $boost = new TailwindMergeBoost();
+    
+    // Create TailwindMergeOnce instance
+    Config::setAdditionalConfig(config('tailwind-merge', []));
+    $once = new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store());
+    
     $results = [];
 
     // Warmup
     foreach ($testCases as $cases) {
         foreach ($cases as $case) {
             TailwindMerge::merge($case);
+            $once->merge($case);
             $boost->merge($case);
         }
     }
@@ -130,6 +163,17 @@ Route::get('/benchmark', function () {
         $twmEnd = hrtime(true);
         $twmTime = ($twmEnd - $twmStart) / 1_000_000;
 
+        // TailwindMergeOnce (create fresh instance for fair comparison)
+        $once = new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store());
+        $onceStart = hrtime(true);
+        for ($i = 0; $i < $iterations; $i++) {
+            foreach ($cases as $case) {
+                $once->merge($case);
+            }
+        }
+        $onceEnd = hrtime(true);
+        $onceTime = ($onceEnd - $onceStart) / 1_000_000;
+
         // Clear cache for fair comparison
         $boost->clearCache();
 
@@ -145,22 +189,27 @@ Route::get('/benchmark', function () {
 
         $results[$category] = [
             'twm' => $twmTime,
+            'once' => $onceTime,
             'boost' => $boostTime,
-            'speedup' => $twmTime / max($boostTime, 0.001),
+            'onceSpeedup' => $twmTime / max($onceTime, 0.001),
+            'boostSpeedup' => $twmTime / max($boostTime, 0.001),
         ];
     }
 
     // Calculate totals
     $totalTwm = array_sum(array_column($results, 'twm'));
+    $totalOnce = array_sum(array_column($results, 'once'));
     $totalBoost = array_sum(array_column($results, 'boost'));
 
     // Get example outputs
+    $once = new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store());
     $examples = [];
     foreach ($testCases as $category => $cases) {
         $case = $cases[0];
         $examples[$category] = [
             'input' => $case,
             'twm' => TailwindMerge::merge($case),
+            'once' => $once->merge($case),
             'boost' => $boost->merge($case),
         ];
     }
@@ -168,8 +217,10 @@ Route::get('/benchmark', function () {
     return view('benchmark', [
         'results' => $results,
         'totalTwm' => $totalTwm,
+        'totalOnce' => $totalOnce,
         'totalBoost' => $totalBoost,
-        'totalSpeedup' => $totalTwm / max($totalBoost, 0.001),
+        'totalOnceSpeedup' => $totalTwm / max($totalOnce, 0.001),
+        'totalBoostSpeedup' => $totalTwm / max($totalBoost, 0.001),
         'iterations' => $iterations,
         'examples' => $examples,
     ]);
