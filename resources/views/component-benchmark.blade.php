@@ -144,12 +144,28 @@
             </div>
             
             <!-- Key Insight -->
-            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <h4 class="font-semibold text-amber-800 mb-2">💡 Key Insight: Cache Store Calls</h4>
-                <p class="text-sm text-amber-700">
-                    <strong>TailwindMerge</strong> makes <strong class="text-orange-600">{{ number_format($totalCacheStats['twmCacheStores']) }}</strong> cache store calls (database/file I/O).
-                    <strong>TailwindMergeOnce</strong> makes <strong class="text-green-600">0</strong> external cache calls (pure in-memory).
-                    <strong>TailwindMergeBoost</strong> makes <strong class="text-green-600">0</strong> external cache calls (pure in-memory).
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                <h4 class="font-semibold text-amber-800 mb-2">💡 Key Insight: Redis/Database Cache Reads</h4>
+                <p class="text-sm text-amber-700 mb-2">
+                    With <strong>{{ number_format($totalCacheStats['totalRenders']) }}</strong> total renders:
+                </p>
+                <ul class="text-sm text-amber-700 list-disc list-inside space-y-1">
+                    <li><strong>TailwindMerge:</strong> <strong class="text-red-600">{{ number_format($totalCacheStats['twmMergeCalls']) }}</strong> Redis reads (1 per merge call - every render hits the cache store)</li>
+                    <li><strong>TailwindMergeOnce (with cache):</strong> Only <strong class="text-green-600">{{ number_format($totalCacheStats['onceActualCalls']) }}</strong> Redis reads (once per unique input, then memoized in-memory)</li>
+                    <li><strong>TailwindMergeBoost:</strong> <strong class="text-green-600">0</strong> Redis reads (pure in-memory cache, no external I/O)</li>
+                </ul>
+                <p class="text-sm text-amber-800 mt-2 font-medium">
+                    🚀 <strong>once() + cache</strong> reduces Redis reads by <strong class="text-green-600">{{ number_format((1 - ($totalCacheStats['onceActualCalls'] / max($totalCacheStats['twmMergeCalls'], 1))) * 100, 1) }}%</strong>
+                </p>
+            </div>
+            
+            <!-- Feature Parity Warning -->
+            <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <h4 class="font-semibold text-orange-800 mb-2">⚠️ Feature Parity Notice</h4>
+                <p class="text-sm text-orange-700">
+                    <strong>TailwindMergeBoost</strong> is faster but does not have full feature parity with TailwindMerge. 
+                    Run <code class="bg-orange-100 px-1 rounded">php artisan test --filter=BoostFeatureParity</code> to see which edge cases are not yet supported.
+                    For production use, consider <strong>TailwindMergeOnce</strong> which uses the official TailwindMerge with <code>once()</code> memoization for both correctness and performance.
                 </p>
             </div>
         </div>
