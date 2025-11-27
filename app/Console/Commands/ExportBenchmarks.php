@@ -146,7 +146,6 @@ class ExportBenchmarks extends Command
 
             // TailwindMergeOnce (create fresh instance for fair comparison)
             $once = new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store());
-            $this->laravel->singleton(TailwindMergeContract::class, fn () => $once);
             
             $onceStart = hrtime(true);
             for ($i = 0; $i < $iterations; $i++) {
@@ -331,15 +330,11 @@ class ExportBenchmarks extends Command
             ];
             
             // TailwindMerge uses external cache store (database/file/redis) - estimate based on unique variants
-            $twmUniqueInputs = count($variants);
-            $twmCacheStoreEstimate = $twmUniqueInputs;
-            $twmCacheHitsEstimate = $twmMergeCalls - $twmUniqueInputs;
-            
             $cacheStats[$name] = [
                 'totalRenders' => count($variants) * $repeatsPerRender,
                 'twmMergeCalls' => $twmMergeCalls,
-                'twmCacheStores' => $twmCacheStoreEstimate,
-                'twmCacheHits' => $twmCacheHitsEstimate,
+                'twmCacheStores' => count($variants),
+                'twmCacheHits' => $twmMergeCalls - count($variants),
                 'onceMergeCalls' => $onceMergeCalls,
                 'onceActualCalls' => $onceActualCalls,
                 'onceCacheHits' => $onceCacheHits,
