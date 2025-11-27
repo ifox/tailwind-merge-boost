@@ -7,17 +7,13 @@ namespace App\Services;
 /**
  * TailwindMergeBoost - An efficient Tailwind CSS class merger.
  *
- * This implementation is optimized for performance by:
- * - Using lookup tables for common class patterns
- * - Avoiding unnecessary object creation
- * - Using simple string operations and regex
- * - Caching parsed class groups
+ * Optimized for performance using lookup tables, regex caching,
+ * and minimized object creation.
  */
 class TailwindMergeBoost
 {
     /**
      * Cache for parsed class groups.
-     *
      * @var array<string, string>
      */
     private array $classGroupCache = [];
@@ -28,40 +24,34 @@ class TailwindMergeBoost
     private int $cacheSize = 500;
 
     /**
-     * Count of total merge calls.
+     * Stats
      */
     private int $mergeCalls = 0;
-
-    /**
-     * Count of cache hits.
-     */
     private int $cacheHits = 0;
-
-    /**
-     * Count of cache stores (actual processing done).
-     */
     private int $cacheStores = 0;
 
     /**
-     * Pre-compiled regex patterns for performance.
+     * Pre-compiled regex patterns.
      */
-    private const SIZE_PATTERN = '/^-?[\d.]+\s*(px|em|rem|%|vw|vh|vmin|vmax|ch|ex|cm|mm|in|pt|pc|svh|svw|dvh|dvw|lvh|lvw)$/';
-    private const HEX_COLOR_PATTERN = '/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/';
-    private const RGB_PATTERN = '/^rgba?\s*\(/i';
-    private const VAR_PATTERN = '/^var\s*\(/i';
+    // Matches length units strictly
+    private const SIZE_PATTERN = '/^-?(\d+(\.\d+)?)(px|em|rem|%|vw|vh|vmin|vmax|ch|ex|cm|mm|in|pt|pc|svh|svw|dvh|dvw|lvh|lvw|cqw|cqh|cqi|cqb|cqmin|cqmax)$/';
+    // Matches hex, arbitrary hex, and short hex
+    private const HEX_COLOR_PATTERN = '/^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/';
+    // Matches rgb/rgba/hsl/hsla/hwb
+    private const COLOR_FUNCTION_PATTERN = '/^(rgba?|hsla?|hwb|lab|lch|color)\s*\(/i';
     private const URL_PATTERN = '/^url\s*\(/i';
     private const CALC_PATTERN = '/^(calc|min|max|clamp)\s*\(/';
-    private const NUMBER_PATTERN = '/^\d+$/';
-    private const ARBITRARY_PROPERTY_PATTERN = '/^\[[a-zA-Z_-]+:/';
+    // Matches pure numbers (for unitless values like z-index or border width)
+    private const NUMBER_PATTERN = '/^-?\d+(\.\d+)?$/';
+    // Matches arbitrary properties
+    private const ARBITRARY_PROPERTY_PATTERN = '/^\[[a-zA-Z0-9_-]+:/';
 
     /**
-     * Class group patterns - ordered by specificity (more specific first).
-     * Includes comprehensive support for arbitrary values.
-     *
+     * Class group patterns - ordered by specificity.
      * @var array<string, string>
      */
     private static array $classGroupPatterns = [
-        // Spacing - padding (more specific first) - includes arbitrary values
+        // Spacing - padding
         '/^ps-/' => 'padding-s',
         '/^pe-/' => 'padding-e',
         '/^pt-/' => 'padding-t',
@@ -71,7 +61,7 @@ class TailwindMergeBoost
         '/^px-/' => 'padding-x',
         '/^py-/' => 'padding-y',
         '/^p-/' => 'padding',
-        // Spacing - margin (more specific first, handles negative values and arbitrary)
+        // Spacing - margin
         '/^-?ms-/' => 'margin-s',
         '/^-?me-/' => 'margin-e',
         '/^-?mt-/' => 'margin-t',
@@ -81,7 +71,7 @@ class TailwindMergeBoost
         '/^-?mx-/' => 'margin-x',
         '/^-?my-/' => 'margin-y',
         '/^-?m-/' => 'margin',
-        // Width/Height/Size - includes arbitrary values
+        // Sizing
         '/^min-w-/' => 'min-width',
         '/^max-w-/' => 'max-width',
         '/^w-/' => 'width',
@@ -89,13 +79,12 @@ class TailwindMergeBoost
         '/^max-h-/' => 'max-height',
         '/^h-/' => 'height',
         '/^size-/' => 'size',
-        // Flex - includes arbitrary values
+        // Flex/Grid
         '/^flex-/' => 'flex',
         '/^basis-/' => 'flex-basis',
         '/^grow/' => 'flex-grow',
         '/^shrink/' => 'flex-shrink',
         '/^order-/' => 'order',
-        // Grid - includes arbitrary values
         '/^grid-cols-/' => 'grid-cols',
         '/^grid-rows-/' => 'grid-rows',
         '/^col-/' => 'grid-col',
@@ -103,63 +92,10 @@ class TailwindMergeBoost
         '/^gap-x-/' => 'gap-x',
         '/^gap-y-/' => 'gap-y',
         '/^gap-/' => 'gap',
-        // Text size (must be before text color) - includes arbitrary values
-        '/^text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)$/' => 'text-size',
-        // Text color (general pattern for colors) - includes arbitrary
+        // Typography
+        // Matches text-lg, text-lg/7, text-lg/loose
+        '/^text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)(?:\/.+)?$/' => 'text-size',
         '/^text-/' => 'text-color',
-        // Border width (must be before border color) - border, border-0, border-2, border-4, border-8
-        '/^border-(0|2|4|8)$/' => 'border-width',
-        // Border side widths - border-x, border-y, border-t, border-r, border-b, border-l with width
-        '/^border-[xytblr]-(0|2|4|8)$/' => 'border-side-width',
-        // Border side colors - border-t-*, border-r-*, border-b-*, border-l-*, border-x-*, border-y-* with color
-        '/^border-t-/' => 'border-t-color',
-        '/^border-r-/' => 'border-r-color',
-        '/^border-b-/' => 'border-b-color',
-        '/^border-l-/' => 'border-l-color',
-        '/^border-x-/' => 'border-x-color',
-        '/^border-y-/' => 'border-y-color',
-        // Border color (general) - includes arbitrary
-        '/^border-/' => 'border-color',
-        // Ring width (must be before ring color) - ring, ring-0, ring-1, ring-2, ring-4, ring-8
-        '/^ring-(0|1|2|4|8)$/' => 'ring-width',
-        // Ring offset - includes arbitrary
-        '/^ring-offset-/' => 'ring-offset',
-        // Ring color - includes arbitrary
-        '/^ring-/' => 'ring-color',
-        // Outline width (must be before outline color)
-        '/^outline-(0|1|2|4|8)$/' => 'outline-width',
-        // Outline offset - includes arbitrary
-        '/^outline-offset-/' => 'outline-offset',
-        // Outline color - includes arbitrary
-        '/^outline-/' => 'outline-color',
-        // Background gradient (must be before bg color)
-        '/^bg-gradient-/' => 'bg-gradient',
-        // Background position
-        '/^bg-(top|bottom|left|right|center)$/' => 'bg-position',
-        // Background size
-        '/^bg-(auto|cover|contain)$/' => 'bg-size',
-        // Background image (none)
-        '/^bg-none$/' => 'bg-image',
-        // Background color - includes arbitrary
-        '/^bg-/' => 'bg-color',
-        // Fill - includes arbitrary
-        '/^fill-/' => 'fill',
-        // Stroke width - includes arbitrary
-        '/^stroke-(0|1|2)$/' => 'stroke-width',
-        // Stroke color - includes arbitrary
-        '/^stroke-/' => 'stroke-color',
-        // Shadow - includes arbitrary
-        '/^shadow/' => 'shadow',
-        '/^accent-/' => 'accent',
-        '/^caret-/' => 'caret',
-        '/^decoration-/' => 'decoration',
-        '/^divide-/' => 'divide',
-        '/^placeholder-/' => 'placeholder',
-        // Gradient - includes arbitrary
-        '/^from-/' => 'gradient-from',
-        '/^via-/' => 'gradient-via',
-        '/^to-/' => 'gradient-to',
-        // Typography - includes arbitrary values
         '/^font-/' => 'font',
         '/^leading-/' => 'leading',
         '/^tracking-/' => 'tracking',
@@ -168,23 +104,40 @@ class TailwindMergeBoost
         '/^whitespace-/' => 'whitespace',
         '/^break-/' => 'break',
         '/^hyphens-/' => 'hyphens',
-        // Border radius - includes arbitrary
-        '/^rounded/' => 'rounded',
-        // Transforms - includes arbitrary
-        '/^scale-/' => 'scale',
-        '/^-?rotate-/' => 'rotate',
-        '/^-?translate-x-/' => 'translate-x',
-        '/^-?translate-y-/' => 'translate-y',
-        '/^-?skew-x-/' => 'skew-x',
-        '/^-?skew-y-/' => 'skew-y',
-        '/^origin-/' => 'origin',
-        // Transitions - includes arbitrary
-        '/^transition/' => 'transition',
-        '/^duration-/' => 'duration',
-        '/^ease-/' => 'ease',
-        '/^delay-/' => 'delay',
-        '/^animate-/' => 'animate',
-        // Filters - includes arbitrary
+        '/^content-/' => 'content',
+        // Borders
+        '/^border-(0|2|4|8)$/' => 'border-width',
+        '/^border-[xytblr]-(0|2|4|8)$/' => 'border-side-width',
+        '/^border-t-/' => 'border-t-color',
+        '/^border-r-/' => 'border-r-color',
+        '/^border-b-/' => 'border-b-color',
+        '/^border-l-/' => 'border-l-color',
+        '/^border-x-/' => 'border-x-color',
+        '/^border-y-/' => 'border-y-color',
+        '/^border-/' => 'border-color',
+        '/^divide-x-reverse$/' => 'divide-x-reverse',
+        '/^divide-y-reverse$/' => 'divide-y-reverse',
+        '/^divide-x-/' => 'divide-x',
+        '/^divide-y-/' => 'divide-y',
+        '/^divide-/' => 'divide-color',
+        // Outline & Ring
+        '/^outline-(0|1|2|4|8)$/' => 'outline-width',
+        '/^outline-offset-/' => 'outline-offset',
+        '/^outline-/' => 'outline-color',
+        '/^ring-(0|1|2|4|8)$/' => 'ring-width',
+        '/^ring-offset-/' => 'ring-offset',
+        '/^ring-/' => 'ring-color',
+        // Background
+        '/^bg-gradient-/' => 'bg-gradient',
+        '/^bg-(top|bottom|left|right|center)$/' => 'bg-position',
+        '/^bg-(auto|cover|contain)$/' => 'bg-size',
+        '/^bg-/' => 'bg-color',
+        // Effects
+        '/^shadow/' => 'shadow',
+        '/^opacity-/' => 'opacity',
+        '/^mix-blend-/' => 'mix-blend',
+        '/^bg-blend-/' => 'bg-blend',
+        // Filters
         '/^blur/' => 'blur',
         '/^brightness-/' => 'brightness',
         '/^contrast-/' => 'contrast',
@@ -194,12 +147,36 @@ class TailwindMergeBoost
         '/^saturate-/' => 'saturate',
         '/^sepia/' => 'sepia',
         '/^drop-shadow/' => 'drop-shadow',
-        '/^backdrop-/' => 'backdrop',
-        // Layout - includes arbitrary
+        '/^backdrop-blur/' => 'backdrop-blur',
+        '/^backdrop-brightness/' => 'backdrop-brightness',
+        '/^backdrop-contrast/' => 'backdrop-contrast',
+        '/^backdrop-grayscale/' => 'backdrop-grayscale',
+        '/^backdrop-hue-rotate/' => 'backdrop-hue-rotate',
+        '/^backdrop-invert/' => 'backdrop-invert',
+        '/^backdrop-opacity/' => 'backdrop-opacity',
+        '/^backdrop-saturate/' => 'backdrop-saturate',
+        '/^backdrop-sepia/' => 'backdrop-sepia',
+        // Transforms
+        '/^scale-/' => 'scale',
+        '/^-?rotate-/' => 'rotate',
+        '/^-?translate-x-/' => 'translate-x',
+        '/^-?translate-y-/' => 'translate-y',
+        '/^-?skew-x-/' => 'skew-x',
+        '/^-?skew-y-/' => 'skew-y',
+        '/^origin-/' => 'origin',
+        // Interactivity
+        '/^cursor-/' => 'cursor',
+        '/^select-/' => 'select',
+        '/^resize/' => 'resize',
+        '/^list-/' => 'list',
+        '/^appearance-/' => 'appearance',
+        '/^pointer-events-/' => 'pointer-events',
+        '/^will-change-/' => 'will-change',
+        '/^accent-/' => 'accent',
+        '/^caret-/' => 'caret',
+        // Layout
         '/^aspect-/' => 'aspect',
-        '/^columns-\d+$/' => 'columns-count',
-        '/^columns-auto$/' => 'columns-count',
-        '/^columns-\[/' => 'columns-width',
+        '/^columns-/' => 'columns', // handling resolved in getArbitrary logic mostly
         '/^object-/' => 'object',
         '/^overflow-x-/' => 'overflow-x',
         '/^overflow-y-/' => 'overflow-y',
@@ -217,40 +194,46 @@ class TailwindMergeBoost
         '/^-?start-/' => 'start',
         '/^-?end-/' => 'end',
         '/^-?z-/' => 'z-index',
-        // Spacing between - includes arbitrary
+        // Spacing between
         '/^-?space-x-/' => 'space-x',
         '/^-?space-y-/' => 'space-y',
-        // Scroll - includes arbitrary
-        '/^scroll-m[xytblrse]?-/' => 'scroll-m',
-        '/^scroll-p[xytblrse]?-/' => 'scroll-p',
-        '/^snap-/' => 'snap',
-        // Other - includes arbitrary
-        '/^opacity-/' => 'opacity',
-        '/^cursor-/' => 'cursor',
-        '/^select-/' => 'select',
-        '/^resize/' => 'resize',
-        '/^list-/' => 'list',
-        '/^appearance-/' => 'appearance',
-        '/^pointer-events-/' => 'pointer-events',
-        '/^touch-/' => 'touch',
-        '/^will-change-/' => 'will-change',
-        '/^content-/' => 'content',
-        '/^items-/' => 'items',
-        '/^justify-/' => 'justify',
-        '/^self-/' => 'self',
-        '/^place-/' => 'place',
+        // SVG
+        '/^fill-/' => 'fill',
+        '/^stroke-(0|1|2)$/' => 'stroke-width',
+        '/^stroke-/' => 'stroke-color',
+        // Table
         '/^table-/' => 'table',
         '/^caption-/' => 'caption',
+        // Line clamp
         '/^line-clamp-/' => 'line-clamp',
+        // Scroll
+        '/^scroll-m[xytblrse]?-/' => 'scroll-m',
+        '/^scroll-p[xytblrse]?-/' => 'scroll-p',
+        '/^snap-align-/' => 'snap-align',
+        '/^snap-stop-/' => 'snap-stop',
+        '/^snap-type-/' => 'snap-type',
+        '/^snap-/' => 'snap-strictness', // snap-mandatory, snap-proximity
+        // Touch
+        '/^touch-/' => 'touch', 
+        // Gradient
+        '/^from-/' => 'gradient-from',
+        '/^via-/' => 'gradient-via',
+        '/^to-/' => 'gradient-to',
+        '/^decoration-(0|1|2|4|8|auto|from-font)$/' => 'text-decoration-thickness',
+        '/^decoration-/' => 'text-decoration-color',
+        // Transition
+        '/^transition/' => 'transition',
+        '/^duration-/' => 'duration',
+        '/^ease-/' => 'ease',
+        '/^delay-/' => 'delay',
+        '/^animate-/' => 'animate',
     ];
 
     /**
-     * Exact class mappings for common classes without patterns.
-     *
+     * Exact class mappings.
      * @var array<string, string>
      */
     private static array $exactClassGroups = [
-        // Display
         'block' => 'display',
         'inline-block' => 'display',
         'inline' => 'display',
@@ -272,40 +255,32 @@ class TailwindMergeBoost
         'contents' => 'display',
         'list-item' => 'display',
         'hidden' => 'display',
-        // Position
         'static' => 'position',
         'fixed' => 'position',
         'absolute' => 'position',
         'relative' => 'position',
         'sticky' => 'position',
-        // Visibility
         'visible' => 'visibility',
         'invisible' => 'visibility',
         'collapse' => 'visibility',
-        // Float
         'float-right' => 'float',
         'float-left' => 'float',
         'float-none' => 'float',
         'float-start' => 'float',
         'float-end' => 'float',
-        // Clear
         'clear-left' => 'clear',
         'clear-right' => 'clear',
         'clear-both' => 'clear',
         'clear-none' => 'clear',
         'clear-start' => 'clear',
         'clear-end' => 'clear',
-        // Isolation
         'isolate' => 'isolation',
         'isolation-auto' => 'isolation',
-        // Box
         'box-border' => 'box-sizing',
         'box-content' => 'box-sizing',
         'box-decoration-slice' => 'box-decoration',
         'box-decoration-clone' => 'box-decoration',
-        // Container
         'container' => 'container',
-        // Border width (standalone)
         'border' => 'border-width',
         'border-t' => 'border-side-width',
         'border-r' => 'border-side-width',
@@ -313,35 +288,28 @@ class TailwindMergeBoost
         'border-l' => 'border-side-width',
         'border-x' => 'border-side-width',
         'border-y' => 'border-side-width',
-        // Ring width (standalone)
         'ring' => 'ring-width',
-        // Outline width (standalone)
+        'ring-inset' => 'ring-inset',
         'outline' => 'outline-width',
         'outline-none' => 'outline-width',
-        // Font style
         'italic' => 'font-style',
         'not-italic' => 'font-style',
-        // Font smoothing
         'antialiased' => 'font-smoothing',
         'subpixel-antialiased' => 'font-smoothing',
-        // Text decoration
         'underline' => 'text-decoration',
         'overline' => 'text-decoration',
         'line-through' => 'text-decoration',
         'no-underline' => 'text-decoration',
-        // Text transform
         'uppercase' => 'text-transform',
         'lowercase' => 'text-transform',
         'capitalize' => 'text-transform',
         'normal-case' => 'text-transform',
-        // Text overflow
         'truncate' => 'text-overflow',
         'text-ellipsis' => 'text-overflow',
         'text-clip' => 'text-overflow',
-        // Screen readers
         'sr-only' => 'sr',
         'not-sr-only' => 'sr',
-        // Font variant numeric
+        // Font Variant Numeric
         'normal-nums' => 'fvn-normal',
         'ordinal' => 'fvn-ordinal',
         'slashed-zero' => 'fvn-slashed-zero',
@@ -351,27 +319,36 @@ class TailwindMergeBoost
         'tabular-nums' => 'fvn-spacing',
         'diagonal-fractions' => 'fvn-fraction',
         'stacked-fractions' => 'fvn-fraction',
-        // Transforms
         'transform' => 'transform',
         'transform-gpu' => 'transform',
         'transform-none' => 'transform',
-        // Space reverse
         'space-x-reverse' => 'space-x-reverse',
         'space-y-reverse' => 'space-y-reverse',
-        // Divide reverse
-        'divide-x-reverse' => 'divide-x-reverse',
-        'divide-y-reverse' => 'divide-y-reverse',
-        // Ring inset
-        'ring-inset' => 'ring-inset',
         // Touch
+        'touch-auto' => 'touch',
+        'touch-none' => 'touch',
+        'touch-pan-x' => 'touch-x',
+        'touch-pan-left' => 'touch-x',
+        'touch-pan-right' => 'touch-x',
+        'touch-pan-y' => 'touch-y',
+        'touch-pan-up' => 'touch-y',
+        'touch-pan-down' => 'touch-y',
         'touch-pinch-zoom' => 'touch-pz',
-        // Background image
+        'touch-manipulation' => 'touch',
+        // Background
         'bg-none' => 'bg-image',
+        'bg-repeat' => 'bg-repeat',
+        'bg-no-repeat' => 'bg-repeat',
+        'bg-repeat-x' => 'bg-repeat',
+        'bg-repeat-y' => 'bg-repeat',
+        'bg-repeat-round' => 'bg-repeat',
+        'bg-repeat-space' => 'bg-repeat',
+        // Line clamp
+        'line-clamp-none' => 'line-clamp',
     ];
 
     /**
-     * Conflicting class groups - when a class is set, remove these conflicts.
-     *
+     * Conflicting class groups.
      * @var array<string, array<string>>
      */
     private static array $conflictingGroups = [
@@ -389,15 +366,22 @@ class TailwindMergeBoost
         'size' => ['width', 'height'],
         'scroll-m' => ['scroll-mx', 'scroll-my', 'scroll-ms', 'scroll-me', 'scroll-mt', 'scroll-mr', 'scroll-mb', 'scroll-ml'],
         'scroll-p' => ['scroll-px', 'scroll-py', 'scroll-ps', 'scroll-pe', 'scroll-pt', 'scroll-pr', 'scroll-pb', 'scroll-pl'],
-        'bg-image' => ['bg-color'],
+        'bg-image' => ['bg-color'], // In strict Tailwind, these might co-exist, but merge libraries often conflict them
         'bg-color' => ['bg-image'],
+        // Font Variant Numeric: normal-nums resets everything
+        'fvn-normal' => ['fvn-ordinal', 'fvn-slashed-zero', 'fvn-figure', 'fvn-spacing', 'fvn-fraction'],
+        'fvn-ordinal' => ['fvn-normal'],
+        'fvn-slashed-zero' => ['fvn-normal'],
+        'fvn-figure' => ['fvn-normal'],
+        'fvn-spacing' => ['fvn-normal'],
+        'fvn-fraction' => ['fvn-normal'],
+        // Touch
+        'touch' => ['touch-x', 'touch-y', 'touch-pz'],
+        'touch-x' => ['touch'],
+        'touch-y' => ['touch'],
+        'touch-pz' => ['touch'],
     ];
 
-    /**
-     * Merge Tailwind CSS classes, resolving conflicts.
-     *
-     * @param  string|array<string>  ...$args
-     */
     public function merge(string|array ...$args): string
     {
         $this->mergeCalls++;
@@ -407,28 +391,20 @@ class TailwindMergeBoost
             return '';
         }
 
-        // Check cache first
         $cacheKey = $this->getCacheKey($input);
         if (isset($this->classGroupCache[$cacheKey])) {
             $this->cacheHits++;
-
             return $this->classGroupCache[$cacheKey];
         }
 
         $result = $this->processClasses($input);
-
-        // Store in cache with size limit
+        
         $this->storeInCache($cacheKey, $result);
         $this->cacheStores++;
 
         return $result;
     }
 
-    /**
-     * Flatten input arguments to a single string.
-     *
-     * @param  array<string|array<string>>  $args
-     */
     private function flattenInput(array $args): string
     {
         $parts = [];
@@ -439,13 +415,9 @@ class TailwindMergeBoost
                 $parts[] = $arg;
             }
         }
-
         return implode(' ', $parts);
     }
 
-    /**
-     * Process classes and resolve conflicts.
-     */
     private function processClasses(string $input): string
     {
         $classes = preg_split('/\s+/', trim($input), -1, PREG_SPLIT_NO_EMPTY);
@@ -456,102 +428,95 @@ class TailwindMergeBoost
         $classGroups = [];
         $result = [];
 
-        // Process in reverse order (later classes win)
         for ($i = count($classes) - 1; $i >= 0; $i--) {
             $class = $classes[$i];
             $parsed = $this->parseClass($class);
 
             if ($parsed === null) {
-                // Unknown class, keep it
                 $result[] = $class;
-
                 continue;
             }
 
-            $groupKey = $parsed['modifierId'].$parsed['groupId'];
+            $groupId = $parsed['groupId'];
+            $modifierId = $parsed['modifierId'];
+            $groupKey = $modifierId . $groupId;
 
-            // Skip if we already have this group
             if (isset($classGroups[$groupKey])) {
                 continue;
             }
 
-            // Mark this group as used
             $classGroups[$groupKey] = true;
 
-            // Mark conflicting groups as used
-            if (isset(self::$conflictingGroups[$parsed['groupId']])) {
-                foreach (self::$conflictingGroups[$parsed['groupId']] as $conflictingGroup) {
-                    $classGroups[$parsed['modifierId'].$conflictingGroup] = true;
+            // Handle conflicting groups
+            if (isset(self::$conflictingGroups[$groupId])) {
+                foreach (self::$conflictingGroups[$groupId] as $conflictingGroup) {
+                    $classGroups[$modifierId . $conflictingGroup] = true;
                 }
+            }
+
+            // Special handling for text-size with line-height modifier (e.g. text-lg/7)
+            // This must conflict with leading-* classes
+            if ($groupId === 'text-size' && str_contains($class, '/')) {
+                $classGroups[$modifierId . 'leading'] = true;
             }
 
             $result[] = $class;
         }
 
-        // Reverse back to original order
         return implode(' ', array_reverse($result));
     }
 
     /**
-     * Parse a class and extract its group and modifiers.
-     *
-     * @return array{modifierId: string, groupId: string}|null
+     * Parses a class to extract modifiers and the base utility.
+     * Handles arbitrary variants correctly (e.g., group-[:nth-of-type(3)_&]:block).
      */
     private function parseClass(string $class): ?array
     {
-        // Handle standalone arbitrary properties like [color:red] or hover:[color:red]
-        // These are different from utility classes with arbitrary values like ring-[#ff0000]
-        // Standalone arbitrary properties start with '[' (after any modifiers) and contain ':'
-        $bracketPos = strpos($class, '[');
-        $isArbitraryProperty = false;
+        $modifiers = [];
+        $baseClass = $class;
         
-        if ($bracketPos !== false) {
-            // Check if this is a standalone arbitrary property (starts with [ after modifiers)
-            // vs a utility class with arbitrary value (has a prefix before [)
-            $afterBracket = substr($class, $bracketPos);
-            // Arbitrary properties have format [property:value]
-            // Arbitrary values have format prefix-[value]
-            if (preg_match(self::ARBITRARY_PROPERTY_PATTERN, $afterBracket)) {
-                $isArbitraryProperty = true;
+        // Split by ':' but respect brackets []
+        $start = 0;
+        $depth = 0;
+        $length = strlen($class);
+        
+        for ($i = 0; $i < $length; $i++) {
+            $char = $class[$i];
+            
+            if ($char === '[') {
+                $depth++;
+            } elseif ($char === ']') {
+                $depth--;
+            } elseif ($char === ':' && $depth === 0) {
+                // Found a separator
+                $modifiers[] = substr($class, $start, $i - $start);
+                $start = $i + 1;
             }
         }
         
-        if ($isArbitraryProperty) {
-            if ($bracketPos > 0) {
-                // There are modifiers before the bracket, e.g., hover:[color:red]
-                $beforeBracket = substr($class, 0, $bracketPos);
-                $baseClass = substr($class, $bracketPos);
-                
-                // Remove trailing colon from modifiers if present
-                $beforeBracket = rtrim($beforeBracket, ':');
-                $modifiers = $beforeBracket !== '' ? explode(':', $beforeBracket) : [];
-            } else {
-                // No modifiers, just the arbitrary property like [color:red]
-                $baseClass = $class;
-                $modifiers = [];
-            }
+        if ($start > 0 && $start < $length) {
+            $baseClass = substr($class, $start);
+        } elseif ($start >= $length) {
+            // Edge case where class ends with colon? Invalid in Tailwind usually,
+            // but for this logic, if we consumed everything, base is empty.
+            return null;
         } else {
-            // Standard class handling - extract modifiers (responsive, hover, etc.)
-            $parts = explode(':', $class);
-            $baseClass = array_pop($parts);
-            $modifiers = $parts;
+            // No modifiers found
+            $baseClass = $class;
         }
 
-        // Handle important modifier
+        // Handle important modifier '!' at start of base class
         $hasImportant = false;
         if (str_starts_with($baseClass, '!')) {
             $hasImportant = true;
             $baseClass = substr($baseClass, 1);
         }
 
-        // Get the group ID for the base class
         $groupId = $this->getClassGroup($baseClass);
-
         if ($groupId === null) {
             return null;
         }
 
-        // Sort modifiers for consistent ordering
         sort($modifiers);
         $modifierId = implode(':', $modifiers);
         if ($hasImportant) {
@@ -564,45 +529,36 @@ class TailwindMergeBoost
         ];
     }
 
-    /**
-     * Get the group ID for a base class.
-     */
     private function getClassGroup(string $baseClass): ?string
     {
-        // Check exact matches first (faster)
         if (isset(self::$exactClassGroups[$baseClass])) {
             return self::$exactClassGroups[$baseClass];
         }
 
-        // Handle negative values (e.g., -mt-4)
         $checkClass = $baseClass;
         if (str_starts_with($baseClass, '-')) {
             $checkClass = substr($baseClass, 1);
         }
 
-        // Handle special cases for arbitrary values that need type detection
+        // Handle Arbitrary Values: prefix-[value]
         if (preg_match('/^([a-z-]+)-\[(.+)\]$/', $checkClass, $matches)) {
-            $prefix = $matches[1];
-            $arbitraryValue = $matches[2];
-            
-            // Determine the group based on the prefix and arbitrary value type
-            return $this->getArbitraryClassGroup($prefix, $arbitraryValue);
+            return $this->getArbitraryClassGroup($matches[1], $matches[2]);
         }
 
-        // Check pattern matches
         foreach (self::$classGroupPatterns as $pattern => $groupId) {
             if (preg_match($pattern, $checkClass)) {
                 return $groupId;
             }
         }
 
-        // Handle arbitrary properties like [property:value] or [--custom:value]
-        if (preg_match('/^\[([a-zA-Z_-]+):/', $baseClass, $matches)) {
-            // Extract the property name and use it as the group
-            return 'arbitrary-' . $matches[1];
+        // Arbitrary Property: [property:value]
+        if (preg_match(self::ARBITRARY_PROPERTY_PATTERN, $baseClass, $matches)) {
+            // Extract property name
+            $prop = substr($matches[0], 1, -1);
+            return 'arbitrary-' . $prop;
         }
-
-        // Handle arbitrary CSS like [color:red] or [mask-type:alpha]
+        
+        // Generic arbitrary
         if (preg_match('/^\[.+\]$/', $baseClass)) {
             return 'arbitrary';
         }
@@ -610,25 +566,29 @@ class TailwindMergeBoost
         return null;
     }
 
-    /**
-     * Get the group ID for an arbitrary value class.
-     */
     private function getArbitraryClassGroup(string $prefix, string $arbitraryValue): ?string
     {
-        // Determine if the arbitrary value is a color (only hex colors recognized for compatibility)
-        $isColor = $this->isArbitraryColor($arbitraryValue);
-        // Determine if the arbitrary value is a size/length
-        $isSize = $this->isArbitrarySize($arbitraryValue);
-        // Determine if the arbitrary value is a URL (for bg-image)
-        $isUrl = (bool) preg_match(self::URL_PATTERN, $arbitraryValue);
-        
-        // For utilities that can have either color or size values,
-        // only merge if we can definitively identify the type.
-        // This matches TailwindMerge v1.1.2 behavior.
+        // Handle explicit type hints (e.g. length:10px, color:red)
+        if (str_starts_with($arbitraryValue, 'length:')) {
+            $isSize = true;
+            $isColor = false;
+            $isUrl = false;
+        } elseif (str_starts_with($arbitraryValue, 'color:')) {
+            $isSize = false;
+            $isColor = true;
+            $isUrl = false;
+        } elseif (str_starts_with($arbitraryValue, 'url:')) {
+            $isUrl = true;
+            $isSize = false;
+            $isColor = false;
+        } else {
+            $isSize = $this->isArbitrarySize($arbitraryValue);
+            $isColor = $this->isArbitraryColor($arbitraryValue);
+            $isUrl = (bool) preg_match(self::URL_PATTERN, $arbitraryValue);
+        }
 
-        // Map prefixes to their correct groups based on value type
-        // For utilities with ambiguous types, return a unique arbitrary group if type is unknown
         $prefixMappings = [
+            // Border
             'border' => $isSize ? 'border-width' : ($isColor ? 'border-color' : 'border-arbitrary'),
             'border-t' => $isSize ? 'border-side-width' : ($isColor ? 'border-t-color' : 'border-t-arbitrary'),
             'border-r' => $isSize ? 'border-side-width' : ($isColor ? 'border-r-color' : 'border-r-arbitrary'),
@@ -636,209 +596,116 @@ class TailwindMergeBoost
             'border-l' => $isSize ? 'border-side-width' : ($isColor ? 'border-l-color' : 'border-l-arbitrary'),
             'border-x' => $isSize ? 'border-side-width' : ($isColor ? 'border-x-color' : 'border-x-arbitrary'),
             'border-y' => $isSize ? 'border-side-width' : ($isColor ? 'border-y-color' : 'border-y-arbitrary'),
-            'ring' => $isSize ? 'ring-width' : ($isColor ? 'ring-color' : 'ring-arbitrary'),
-            'outline' => $isSize ? 'outline-width' : ($isColor ? 'outline-color' : 'outline-arbitrary'),
-            'stroke' => $isSize ? 'stroke-width' : ($isColor ? 'stroke-color' : 'stroke-arbitrary'),
-            'text' => $isSize ? 'text-size' : ($isColor ? 'text-color' : 'text-arbitrary'),
-            'bg' => $isUrl ? 'bg-image' : ($isColor ? 'bg-color' : 'bg-arbitrary'),
-            'p' => 'padding',
-            'pt' => 'padding-t',
-            'pr' => 'padding-r',
-            'pb' => 'padding-b',
-            'pl' => 'padding-l',
-            'px' => 'padding-x',
-            'py' => 'padding-y',
-            'ps' => 'padding-s',
-            'pe' => 'padding-e',
-            'm' => 'margin',
-            'mt' => 'margin-t',
-            'mr' => 'margin-r',
-            'mb' => 'margin-b',
-            'ml' => 'margin-l',
-            'mx' => 'margin-x',
-            'my' => 'margin-y',
-            'ms' => 'margin-s',
-            'me' => 'margin-e',
-            'w' => 'width',
-            'h' => 'height',
-            'min-w' => 'min-width',
-            'max-w' => 'max-width',
-            'min-h' => 'min-height',
-            'max-h' => 'max-height',
+            // Spacing & Sizing (always size for ambiguous)
+            'p' => 'padding', 'pt' => 'padding-t', 'pr' => 'padding-r', 'pb' => 'padding-b', 'pl' => 'padding-l', 'px' => 'padding-x', 'py' => 'padding-y', 'ps' => 'padding-s', 'pe' => 'padding-e',
+            'm' => 'margin', 'mt' => 'margin-t', 'mr' => 'margin-r', 'mb' => 'margin-b', 'ml' => 'margin-l', 'mx' => 'margin-x', 'my' => 'margin-y', 'ms' => 'margin-s', 'me' => 'margin-e',
+            'w' => 'width', 'h' => 'height', 'min-w' => 'min-width', 'max-w' => 'max-width', 'min-h' => 'min-height', 'max-h' => 'max-height',
             'size' => 'size',
-            'gap' => 'gap',
-            'gap-x' => 'gap-x',
-            'gap-y' => 'gap-y',
-            'rounded' => 'rounded',
-            'z' => 'z-index',
-            'top' => 'top',
-            'right' => 'right',
-            'bottom' => 'bottom',
-            'left' => 'left',
-            'inset' => 'inset',
-            'inset-x' => 'inset-x',
-            'inset-y' => 'inset-y',
-            'start' => 'start',
-            'end' => 'end',
-            'space-x' => 'space-x',
-            'space-y' => 'space-y',
-            'grid-cols' => 'grid-cols',
-            'grid-rows' => 'grid-rows',
-            'col' => 'grid-col',
-            'row' => 'grid-row',
-            'translate-x' => 'translate-x',
-            'translate-y' => 'translate-y',
-            'rotate' => 'rotate',
-            'skew-x' => 'skew-x',
-            'skew-y' => 'skew-y',
-            'scale' => 'scale',
-            'from' => 'gradient-from',
-            'via' => 'gradient-via',
-            'to' => 'gradient-to',
-            'opacity' => 'opacity',
-            'shadow' => 'shadow',
-            'blur' => 'blur',
-            'brightness' => 'brightness',
-            'contrast' => 'contrast',
-            'saturate' => 'saturate',
-            'hue-rotate' => 'hue-rotate',
-            'duration' => 'duration',
-            'delay' => 'delay',
-            'ease' => 'ease',
-            'animate' => 'animate',
-            'font' => 'font',
-            'leading' => 'leading',
-            'tracking' => 'tracking',
-            'indent' => 'indent',
-            'line-clamp' => 'line-clamp',
-            'aspect' => 'aspect',
-            'columns' => $isSize ? 'columns-width' : 'columns-count',
-            'order' => 'order',
+            'top' => 'top', 'right' => 'right', 'bottom' => 'bottom', 'left' => 'left',
+            'inset' => 'inset', 'inset-x' => 'inset-x', 'inset-y' => 'inset-y', 'start' => 'start', 'end' => 'end',
+            'gap' => 'gap', 'gap-x' => 'gap-x', 'gap-y' => 'gap-y',
+            'space-x' => 'space-x', 'space-y' => 'space-y',
             'basis' => 'flex-basis',
-            'flex' => 'flex',
-            'fill' => 'fill',
+            // Colors / Visuals
+            'text' => $isSize ? 'text-size' : ($isColor ? 'text-color' : 'text-arbitrary'),
+            'bg' => $isUrl ? 'bg-image' : ($isColor ? 'bg-color' : ($isSize ? 'bg-size' : 'bg-arbitrary')),
+            'ring' => $isSize ? 'ring-width' : ($isColor ? 'ring-color' : 'ring-arbitrary'),
+            'ring-offset' => $isSize ? 'ring-offset' : ($isColor ? 'ring-offset-color' : 'ring-offset-arbitrary'),
+            'outline' => $isSize ? 'outline-width' : ($isColor ? 'outline-color' : 'outline-arbitrary'),
+            'decoration' => $isSize ? 'text-decoration-thickness' : ($isColor ? 'text-decoration-color' : 'decoration-arbitrary'),
+            'shadow' => 'shadow',
             'accent' => 'accent',
             'caret' => 'caret',
+            'fill' => 'fill',
+            'stroke' => $isSize ? 'stroke-width' : ($isColor ? 'stroke-color' : 'stroke-arbitrary'),
             'content' => 'content',
-            'cursor' => 'cursor',
-            'ring-offset' => 'ring-offset',
-            'outline-offset' => 'outline-offset',
+            // Others
+            'opacity' => 'opacity',
+            'z' => 'z-index',
+            'order' => 'order',
+            'flex' => 'flex',
+            'grid-cols' => 'grid-cols',
+            'grid-rows' => 'grid-rows',
+            'columns' => $isSize ? 'columns-width' : 'columns-count',
+            'line-clamp' => 'line-clamp',
         ];
 
         if (isset($prefixMappings[$prefix])) {
             return $prefixMappings[$prefix];
         }
 
-        // Fallback: check pattern matches with the full class
-        $fullClass = $prefix . '-[' . $arbitraryValue . ']';
-        foreach (self::$classGroupPatterns as $pattern => $groupId) {
-            if (preg_match($pattern, $fullClass)) {
-                return $groupId;
-            }
-        }
-
         return null;
     }
 
-    /**
-     * Check if an arbitrary value represents a color.
-     * This matches TailwindMerge v1.1.2 behavior which recognizes hex and rgb colors.
-     * Uses pre-compiled regex patterns for better performance.
-     */
     private function isArbitraryColor(string $value): bool
     {
-        // Hex colors: #fff, #ffffff, #ffffffff
+        // 1. Explicit hex
         if (preg_match(self::HEX_COLOR_PATTERN, $value)) {
             return true;
         }
-
-        // RGB/RGBA colors - TailwindMerge v1.1.2 recognizes these
-        if (preg_match(self::RGB_PATTERN, $value)) {
+        // 2. CSS color functions (rgb, hsl, etc.)
+        if (preg_match(self::COLOR_FUNCTION_PATTERN, $value)) {
             return true;
         }
-
-        // CSS variables - TailwindMerge treats var() as colors in color contexts
-        if (preg_match(self::VAR_PATTERN, $value)) {
+        // 3. Common color keywords
+        $keywords = ['transparent', 'currentColor', 'inherit', 'initial', 'unset', 'currentcolor', 'black', 'white'];
+        if (in_array($value, $keywords, true)) {
             return true;
         }
-
-        // Named colors (common ones)
-        $colorKeywords = ['transparent', 'currentColor', 'inherit', 'initial', 'unset', 'currentcolor'];
-        if (in_array($value, $colorKeywords, true)) {
+        // 4. Variables are generally assumed to be colors in color-accepting contexts
+        // unless they are explicitly lengths (which would be caught by hints)
+        // Note: TailwindMerge checks if it *starts* with var(--.
+        if (str_starts_with($value, 'var(--')) {
             return true;
         }
-
-        // Note: TailwindMerge v1.1.2 doesn't recognize hsl() in arbitrary values
-        // So we don't match them here to maintain compatibility
 
         return false;
     }
 
-    /**
-     * Check if an arbitrary value represents a size/length.
-     * Uses pre-compiled regex patterns for better performance.
-     */
-    private function isArbitrarySize(string $value): bool
+private function isArbitrarySize(string $value): bool
     {
-        // CSS length units: px, em, rem, %, vw, vh, ch, etc.
+        // 1. Explicit length units
         if (preg_match(self::SIZE_PATTERN, $value)) {
             return true;
         }
-
-        // Plain numbers (like border-0, border-2)
+        // 2. Calculation functions
+        if (preg_match(self::CALC_PATTERN, $value)) {
+            return true;
+        }
+        // 3. Fractions (e.g. 1/2) for sizing
+        if (str_contains($value, '/') && preg_match('/^[0-9.]+\/[0-9.]+$/', $value)) {
+            return true;
+        }
+        // 4. Plain numbers (only for certain properties, but generic size check often allows them)
         if (preg_match(self::NUMBER_PATTERN, $value)) {
             return true;
         }
 
-        // calc(), min(), max(), clamp() functions typically for sizing
-        if (preg_match(self::CALC_PATTERN, $value)) {
-            return true;
-        }
-
         return false;
     }
 
-    /**
-     * Generate cache key for input.
-     */
     private function getCacheKey(string $input): string
     {
-        // Use xxh128 if available (faster), otherwise fall back to md5
-        if (in_array('xxh128', hash_algos(), true)) {
+        // xxh128 is significantly faster than md5
+        if (version_compare(PHP_VERSION, '8.1.0', '>=') && in_array('xxh128', hash_algos(), true)) {
             return hash('xxh128', $input);
         }
-
         return md5($input);
     }
 
-    /**
-     * Store result in cache with size limit.
-     */
     private function storeInCache(string $key, string $value): void
     {
         if (count($this->classGroupCache) >= $this->cacheSize) {
-            // Remove first half of entries using array_keys for better performance
-            $keys = array_keys($this->classGroupCache);
-            $keysToRemove = array_slice($keys, 0, (int) ($this->cacheSize / 2));
-            foreach ($keysToRemove as $keyToRemove) {
-                unset($this->classGroupCache[$keyToRemove]);
-            }
+            $this->classGroupCache = array_slice($this->classGroupCache, (int)($this->cacheSize / 2), null, true);
         }
-
         $this->classGroupCache[$key] = $value;
     }
 
-    /**
-     * Clear the cache.
-     */
     public function clearCache(): void
     {
         $this->classGroupCache = [];
     }
 
-    /**
-     * Reset all stats (counters).
-     */
     public function resetStats(): void
     {
         $this->mergeCalls = 0;
@@ -846,35 +713,8 @@ class TailwindMergeBoost
         $this->cacheStores = 0;
     }
 
-    /**
-     * Get the total number of merge calls.
-     */
-    public function getMergeCalls(): int
-    {
-        return $this->mergeCalls;
-    }
-
-    /**
-     * Get the number of cache hits.
-     */
-    public function getCacheHits(): int
-    {
-        return $this->cacheHits;
-    }
-
-    /**
-     * Get the number of cache stores (actual processing done).
-     */
-    public function getCacheStores(): int
-    {
-        return $this->cacheStores;
-    }
-
-    /**
-     * Set the cache size.
-     */
-    public function setCacheSize(int $size): void
-    {
-        $this->cacheSize = $size;
-    }
+    public function getMergeCalls(): int { return $this->mergeCalls; }
+    public function getCacheHits(): int { return $this->cacheHits; }
+    public function getCacheStores(): int { return $this->cacheStores; }
+    public function setCacheSize(int $size): void { $this->cacheSize = $size; }
 }
