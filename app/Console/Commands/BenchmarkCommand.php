@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Services\TailwindMergeBoost;
+use App\Services\TailwindMergeOnce;
 use Illuminate\Console\Command;
+use TailwindMerge\Contracts\TailwindMergeContract;
 use TailwindMerge\Laravel\Facades\TailwindMerge;
+use TailwindMerge\Support\Config;
 
 class BenchmarkCommand extends Command
 {
@@ -24,7 +27,7 @@ class BenchmarkCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Benchmark TailwindMerge vs TailwindMergeBoost';
+    protected $description = 'Benchmark TailwindMerge vs TailwindMergeOnce vs TailwindMergeBoost';
 
     /**
      * Test cases for benchmarking.
@@ -71,16 +74,16 @@ class BenchmarkCommand extends Command
         $iterations = (int) $this->option('iterations');
         $warmup = (int) $this->option('warmup');
 
-        $this->info('╔════════════════════════════════════════════════════════════════════════╗');
-        $this->info('║          TailwindMerge vs TailwindMergeBoost Benchmark                 ║');
-        $this->info('╠════════════════════════════════════════════════════════════════════════╣');
-        $this->info(sprintf('║  Iterations: %-10d Warmup: %-10d                          ║', $iterations, $warmup));
-        $this->info('╚════════════════════════════════════════════════════════════════════════╝');
+        $this->info('╔════════════════════════════════════════════════════════════════════════════════════════════╗');
+        $this->info('║          TailwindMerge vs TailwindMergeOnce vs TailwindMergeBoost Benchmark                ║');
+        $this->info('╠════════════════════════════════════════════════════════════════════════════════════════════╣');
+        $this->info(sprintf('║  Iterations: %-10d Warmup: %-10d                                                ║', $iterations, $warmup));
+        $this->info('╚════════════════════════════════════════════════════════════════════════════════════════════╝');
         $this->newLine();
 
         $boost = new TailwindMergeBoost();
 
-        // Verify both implementations produce same/similar results
+        // Verify all implementations produce same/similar results
         $this->info('Verifying output compatibility...');
         $this->verifyOutputs($boost);
         $this->newLine();
@@ -109,29 +112,60 @@ class BenchmarkCommand extends Command
     }
 
     /**
-     * Verify that both implementations produce compatible results.
+     * Create a fresh TailwindMergeOnce instance and bind it to the container.
+     * This ensures the once() memoization is fresh for each benchmark run.
+     */
+    private function bindTailwindMergeOnce(): void
+    {
+        Config::setAdditionalConfig(config('tailwind-merge', []));
+        
+        $this->laravel->singleton(
+            TailwindMergeContract::class,
+            fn () => new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store())
+        );
+    }
+
+    /**
+     * Restore the original TailwindMerge binding.
+     */
+    private function unbindTailwindMergeOnce(): void
+    {
+        // Force Laravel to forget the current binding and re-resolve
+        $this->laravel->forgetInstance(TailwindMergeContract::class);
+    }
+
+    /**
+     * Verify that all implementations produce compatible results.
      */
     private function verifyOutputs(TailwindMergeBoost $boost): void
     {
+        // Temporarily bind TailwindMergeOnce for verification
+        $this->bindTailwindMergeOnce();
+
         $this->table(
-            ['Input', 'TailwindMerge', 'TailwindMergeBoost', 'Match'],
+            ['Input', 'TailwindMerge', 'TailwindMergeOnce', 'TailwindMergeBoost', 'Match'],
             collect($this->testCases)
                 ->flatten()
                 ->take(10)
                 ->map(function ($input) use ($boost) {
                     $twm = TailwindMerge::merge($input);
+                    $tmo = app(TailwindMergeContract::class)->merge($input);
                     $tmb = $boost->merge($input);
-                    $match = $this->compareResults($twm, $tmb) ? '✓' : '✗';
+                    $matchOnce = $this->compareResults($twm, $tmo) ? '✓' : '✗';
+                    $matchBoost = $this->compareResults($twm, $tmb) ? '✓' : '✗';
 
                     return [
-                        strlen($input) > 50 ? substr($input, 0, 47).'...' : $input,
-                        strlen($twm) > 30 ? substr($twm, 0, 27).'...' : $twm,
-                        strlen($tmb) > 30 ? substr($tmb, 0, 27).'...' : $tmb,
-                        $match,
+                        strlen($input) > 40 ? substr($input, 0, 37).'...' : $input,
+                        strlen($twm) > 20 ? substr($twm, 0, 17).'...' : $twm,
+                        $matchOnce,
+                        strlen($tmb) > 20 ? substr($tmb, 0, 17).'...' : $tmb,
+                        $matchBoost,
                     ];
                 })
                 ->toArray()
         );
+
+        $this->unbindTailwindMergeOnce();
     }
 
     /**
@@ -154,9 +188,25 @@ class BenchmarkCommand extends Command
     {
         $allCases = collect($this->testCases)->flatten()->all();
 
+        // Warmup TailwindMerge
         for ($i = 0; $i < $warmup; $i++) {
             foreach ($allCases as $case) {
                 TailwindMerge::merge($case);
+            }
+        }
+
+        // Warmup TailwindMergeOnce
+        $this->bindTailwindMergeOnce();
+        for ($i = 0; $i < $warmup; $i++) {
+            foreach ($allCases as $case) {
+                app(TailwindMergeContract::class)->merge($case);
+            }
+        }
+        $this->unbindTailwindMergeOnce();
+
+        // Warmup TailwindMergeBoost
+        for ($i = 0; $i < $warmup; $i++) {
+            foreach ($allCases as $case) {
                 $boost->merge($case);
             }
         }
@@ -166,11 +216,11 @@ class BenchmarkCommand extends Command
      * Benchmark a category of test cases.
      *
      * @param  array<string>  $cases
-     * @return array{twm: float, boost: float}
+     * @return array{twm: float, once: float, boost: float}
      */
     private function benchmarkCategory(TailwindMergeBoost $boost, array $cases, int $iterations): array
     {
-        // Benchmark TailwindMerge
+        // Benchmark TailwindMerge (without TailwindMergeOnce binding)
         $twmStart = hrtime(true);
         for ($i = 0; $i < $iterations; $i++) {
             foreach ($cases as $case) {
@@ -179,6 +229,18 @@ class BenchmarkCommand extends Command
         }
         $twmEnd = hrtime(true);
         $twmTime = ($twmEnd - $twmStart) / 1_000_000; // Convert to ms
+
+        // Benchmark TailwindMergeOnce (bind fresh instance for the benchmark)
+        $this->bindTailwindMergeOnce();
+        $onceStart = hrtime(true);
+        for ($i = 0; $i < $iterations; $i++) {
+            foreach ($cases as $case) {
+                app(TailwindMergeContract::class)->merge($case);
+            }
+        }
+        $onceEnd = hrtime(true);
+        $onceTime = ($onceEnd - $onceStart) / 1_000_000; // Convert to ms
+        $this->unbindTailwindMergeOnce();
 
         // Clear boost cache for fair comparison
         $boost->clearCache();
@@ -195,6 +257,7 @@ class BenchmarkCommand extends Command
 
         return [
             'twm' => $twmTime,
+            'once' => $onceTime,
             'boost' => $boostTime,
         ];
     }
@@ -202,45 +265,61 @@ class BenchmarkCommand extends Command
     /**
      * Display benchmark results.
      *
-     * @param  array<string, array{twm: float, boost: float}>  $results
+     * @param  array<string, array{twm: float, once: float, boost: float}>  $results
      */
     private function displayResults(array $results, int $iterations): void
     {
         $this->newLine();
-        $this->info('╔════════════════════════════════════════════════════════════════════════╗');
-        $this->info('║                           BENCHMARK RESULTS                            ║');
-        $this->info('╚════════════════════════════════════════════════════════════════════════╝');
+        $this->info('╔════════════════════════════════════════════════════════════════════════════════════════════╗');
+        $this->info('║                                    BENCHMARK RESULTS                                       ║');
+        $this->info('╚════════════════════════════════════════════════════════════════════════════════════════════╝');
 
         $tableData = [];
         $totalTwm = 0;
+        $totalOnce = 0;
         $totalBoost = 0;
 
         foreach ($results as $category => $times) {
-            $speedup = $times['twm'] / max($times['boost'], 0.001);
+            $onceSpeedup = $times['twm'] / max($times['once'], 0.001);
+            $boostSpeedup = $times['twm'] / max($times['boost'], 0.001);
+            $fastest = min($times['twm'], $times['once'], $times['boost']);
+            $winner = match ($fastest) {
+                $times['boost'] => '<fg=green>⚡ Boost</>',
+                $times['once'] => '<fg=blue>⚡ Once</>',
+                default => '<fg=yellow>TailwindMerge</>',
+            };
             $tableData[] = [
                 ucfirst($category),
                 sprintf('%.2f ms', $times['twm']),
-                sprintf('%.2f ms', $times['boost']),
-                sprintf('%.2fx', $speedup),
-                $speedup > 1 ? '<fg=green>⚡ Boost wins</>' : '<fg=yellow>TailwindMerge wins</>',
+                sprintf('%.2f ms (%.2fx)', $times['once'], $onceSpeedup),
+                sprintf('%.2f ms (%.2fx)', $times['boost'], $boostSpeedup),
+                $winner,
             ];
             $totalTwm += $times['twm'];
+            $totalOnce += $times['once'];
             $totalBoost += $times['boost'];
         }
 
         // Add total row
-        $totalSpeedup = $totalTwm / max($totalBoost, 0.001);
+        $totalOnceSpeedup = $totalTwm / max($totalOnce, 0.001);
+        $totalBoostSpeedup = $totalTwm / max($totalBoost, 0.001);
+        $totalFastest = min($totalTwm, $totalOnce, $totalBoost);
+        $totalWinner = match ($totalFastest) {
+            $totalBoost => '<fg=green;options=bold>⚡ Boost wins</>',
+            $totalOnce => '<fg=blue;options=bold>⚡ Once wins</>',
+            default => '<fg=yellow;options=bold>TailwindMerge wins</>',
+        };
         $tableData[] = ['', '', '', '', ''];
         $tableData[] = [
             '<fg=cyan>TOTAL</>',
             sprintf('<fg=cyan>%.2f ms</>', $totalTwm),
-            sprintf('<fg=cyan>%.2f ms</>', $totalBoost),
-            sprintf('<fg=cyan>%.2fx</>', $totalSpeedup),
-            $totalSpeedup > 1 ? '<fg=green;options=bold>⚡ Boost wins</>' : '<fg=yellow;options=bold>TailwindMerge wins</>',
+            sprintf('<fg=cyan>%.2f ms (%.2fx)</>', $totalOnce, $totalOnceSpeedup),
+            sprintf('<fg=cyan>%.2f ms (%.2fx)</>', $totalBoost, $totalBoostSpeedup),
+            $totalWinner,
         ];
 
         $this->table(
-            ['Category', 'TailwindMerge', 'TailwindMergeBoost', 'Speedup', 'Winner'],
+            ['Category', 'TailwindMerge', 'TailwindMergeOnce', 'TailwindMergeBoost', 'Winner'],
             $tableData
         );
 
@@ -252,17 +331,15 @@ class BenchmarkCommand extends Command
             count($this->testCases)
         ));
 
-        if ($totalSpeedup > 1) {
-            $this->info(sprintf(
-                '<fg=green;options=bold>TailwindMergeBoost is %.2fx faster overall!</>',
-                $totalSpeedup
-            ));
-        } else {
-            $this->info(sprintf(
-                '<fg=yellow;options=bold>TailwindMerge is %.2fx faster overall.</>',
-                1 / $totalSpeedup
-            ));
-        }
+        $this->newLine();
+        $this->info(sprintf(
+            '<fg=blue;options=bold>TailwindMergeOnce is %.2fx faster than TailwindMerge</>',
+            $totalOnceSpeedup
+        ));
+        $this->info(sprintf(
+            '<fg=green;options=bold>TailwindMergeBoost is %.2fx faster than TailwindMerge</>',
+            $totalBoostSpeedup
+        ));
     }
 
     /**
@@ -283,6 +360,19 @@ class BenchmarkCommand extends Command
         $twmMemEnd = memory_get_usage();
         $twmMem = $twmMemEnd - $twmMemStart;
 
+        // TailwindMergeOnce memory
+        $this->bindTailwindMergeOnce();
+        gc_collect_cycles();
+        $onceMemStart = memory_get_usage();
+        for ($i = 0; $i < $iterations; $i++) {
+            foreach ($allCases as $case) {
+                app(TailwindMergeContract::class)->merge($case);
+            }
+        }
+        $onceMemEnd = memory_get_usage();
+        $onceMem = $onceMemEnd - $onceMemStart;
+        $this->unbindTailwindMergeOnce();
+
         // TailwindMergeBoost memory
         $boost->clearCache();
         gc_collect_cycles();
@@ -296,15 +386,23 @@ class BenchmarkCommand extends Command
         $boostMem = $boostMemEnd - $boostMemStart;
 
         $this->table(
-            ['Metric', 'TailwindMerge', 'TailwindMergeBoost', 'Difference'],
+            ['Metric', 'TailwindMerge', 'TailwindMergeOnce', 'TailwindMergeBoost'],
             [
                 [
                     'Memory Usage',
                     $this->formatBytes($twmMem),
-                    $this->formatBytes($boostMem),
-                    $boostMem < $twmMem
-                        ? sprintf('<fg=green>-%.1f%%</>', (1 - $boostMem / max($twmMem, 1)) * 100)
-                        : sprintf('<fg=yellow>+%.1f%%</>', ($boostMem / max($twmMem, 1) - 1) * 100),
+                    sprintf('%s (%s)', 
+                        $this->formatBytes($onceMem),
+                        $onceMem < $twmMem
+                            ? sprintf('<fg=green>-%.1f%%</>', (1 - $onceMem / max($twmMem, 1)) * 100)
+                            : sprintf('<fg=yellow>+%.1f%%</>', ($onceMem / max($twmMem, 1) - 1) * 100)
+                    ),
+                    sprintf('%s (%s)', 
+                        $this->formatBytes($boostMem),
+                        $boostMem < $twmMem
+                            ? sprintf('<fg=green>-%.1f%%</>', (1 - $boostMem / max($twmMem, 1)) * 100)
+                            : sprintf('<fg=yellow>+%.1f%%</>', ($boostMem / max($twmMem, 1) - 1) * 100)
+                    ),
                 ],
             ]
         );

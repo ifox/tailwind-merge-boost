@@ -6,10 +6,13 @@ namespace App\Console\Commands;
 
 use App\Services\BenchmarkComponentConfig;
 use App\Services\TailwindMergeBoost;
+use App\Services\TailwindMergeOnce;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\View;
+use TailwindMerge\Contracts\TailwindMergeContract;
 use TailwindMerge\Laravel\Facades\TailwindMerge;
+use TailwindMerge\Support\Config;
 
 class ExportBenchmarks extends Command
 {
@@ -51,6 +54,27 @@ class ExportBenchmarks extends Command
         
         return Command::SUCCESS;
     }
+
+    /**
+     * Create a fresh TailwindMergeOnce instance and bind it to the container.
+     */
+    private function bindTailwindMergeOnce(): void
+    {
+        Config::setAdditionalConfig(config('tailwind-merge', []));
+        
+        $this->laravel->singleton(
+            TailwindMergeContract::class,
+            fn () => new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store())
+        );
+    }
+
+    /**
+     * Restore the original TailwindMerge binding.
+     */
+    private function unbindTailwindMergeOnce(): void
+    {
+        $this->laravel->forgetInstance(TailwindMergeContract::class);
+    }
     
     /**
      * Export simple benchmark results.
@@ -91,6 +115,15 @@ class ExportBenchmarks extends Command
                 $boost->merge($case);
             }
         }
+        
+        // Warmup TailwindMergeOnce
+        $this->bindTailwindMergeOnce();
+        foreach ($testCases as $cases) {
+            foreach ($cases as $case) {
+                app(TailwindMergeContract::class)->merge($case);
+            }
+        }
+        $this->unbindTailwindMergeOnce();
 
         // Benchmark each category
         foreach ($testCases as $category => $cases) {
@@ -104,7 +137,19 @@ class ExportBenchmarks extends Command
             $twmEnd = hrtime(true);
             $twmTime = ($twmEnd - $twmStart) / 1_000_000;
 
-            // Clear cache for fair comparison
+            // TailwindMergeOnce (bind fresh instance)
+            $this->bindTailwindMergeOnce();
+            $onceStart = hrtime(true);
+            for ($i = 0; $i < $iterations; $i++) {
+                foreach ($cases as $case) {
+                    app(TailwindMergeContract::class)->merge($case);
+                }
+            }
+            $onceEnd = hrtime(true);
+            $onceTime = ($onceEnd - $onceStart) / 1_000_000;
+            $this->unbindTailwindMergeOnce();
+
+            // Clear boost cache for fair comparison
             $boost->clearCache();
 
             // TailwindMergeBoost
@@ -119,31 +164,39 @@ class ExportBenchmarks extends Command
 
             $results[$category] = [
                 'twm' => $twmTime,
+                'once' => $onceTime,
                 'boost' => $boostTime,
-                'speedup' => $twmTime / max($boostTime, 0.001),
+                'onceSpeedup' => $twmTime / max($onceTime, 0.001),
+                'boostSpeedup' => $twmTime / max($boostTime, 0.001),
             ];
         }
 
         // Calculate totals
         $totalTwm = array_sum(array_column($results, 'twm'));
+        $totalOnce = array_sum(array_column($results, 'once'));
         $totalBoost = array_sum(array_column($results, 'boost'));
 
         // Get example outputs
+        $this->bindTailwindMergeOnce();
         $examples = [];
         foreach ($testCases as $category => $cases) {
             $case = $cases[0];
             $examples[$category] = [
                 'input' => $case,
                 'twm' => TailwindMerge::merge($case),
+                'once' => app(TailwindMergeContract::class)->merge($case),
                 'boost' => $boost->merge($case),
             ];
         }
+        $this->unbindTailwindMergeOnce();
 
         $html = View::make('benchmark', [
             'results' => $results,
             'totalTwm' => $totalTwm,
+            'totalOnce' => $totalOnce,
             'totalBoost' => $totalBoost,
-            'totalSpeedup' => $totalTwm / max($totalBoost, 0.001),
+            'totalOnceSpeedup' => $totalTwm / max($totalOnce, 0.001),
+            'totalBoostSpeedup' => $totalTwm / max($totalBoost, 0.001),
             'iterations' => $iterations,
             'examples' => $examples,
             'exportedAt' => now()->toIso8601String(),
@@ -178,6 +231,18 @@ class ExportBenchmarks extends Command
             }
             $twmEnd = hrtime(true);
             $twmTime = ($twmEnd - $twmStart) / 1_000_000;
+
+            // TailwindMergeOnce timing (bind fresh instance)
+            $this->bindTailwindMergeOnce();
+            $onceStart = hrtime(true);
+            for ($i = 0; $i < $iterations; $i++) {
+                foreach ($variants as $config) {
+                    View::make("components.ui.{$name}", array_merge($config, ['merger' => 'once', 'slot' => 'Content']))->render();
+                }
+            }
+            $onceEnd = hrtime(true);
+            $onceTime = ($onceEnd - $onceStart) / 1_000_000;
+            $this->unbindTailwindMergeOnce();
             
             // TailwindMergeBoost timing
             $boost->clearCache();
@@ -192,21 +257,26 @@ class ExportBenchmarks extends Command
             
             $componentResults[$name] = [
                 'twm' => $twmTime,
+                'once' => $onceTime,
                 'boost' => $boostTime,
-                'speedup' => $twmTime / max($boostTime, 0.001),
+                'onceSpeedup' => $twmTime / max($onceTime, 0.001),
+                'boostSpeedup' => $twmTime / max($boostTime, 0.001),
                 'variants' => count($variants),
             ];
             
             // Render all variants for display
+            $this->bindTailwindMergeOnce();
             $componentVariants = [];
             foreach ($variants as $index => $config) {
                 $componentVariants[] = [
                     'variant' => $index + 1,
                     'class' => $config['class'],
                     'twm' => View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => ucfirst($name)]))->render(),
+                    'once' => View::make("components.ui.{$name}", array_merge($config, ['merger' => 'once', 'slot' => ucfirst($name)]))->render(),
                     'boost' => View::make("components.ui.{$name}", array_merge($config, ['merger' => 'boost', 'slot' => ucfirst($name)]))->render(),
                 ];
             }
+            $this->unbindTailwindMergeOnce();
             
             $components[$name] = [
                 'name' => $name,
@@ -215,6 +285,7 @@ class ExportBenchmarks extends Command
         }
         
         $twmTime = array_sum(array_column($componentResults, 'twm'));
+        $onceTime = array_sum(array_column($componentResults, 'once'));
         $boostTime = array_sum(array_column($componentResults, 'boost'));
         $totalComponents = count($componentConfigs) * BenchmarkComponentConfig::getVariantsPerComponent() * $iterations;
         
@@ -222,8 +293,10 @@ class ExportBenchmarks extends Command
             'componentResults' => $componentResults,
             'components' => $components,
             'twmTime' => $twmTime,
+            'onceTime' => $onceTime,
             'boostTime' => $boostTime,
-            'speedup' => $twmTime / max($boostTime, 0.001),
+            'onceSpeedup' => $twmTime / max($onceTime, 0.001),
+            'boostSpeedup' => $twmTime / max($boostTime, 0.001),
             'totalComponents' => $totalComponents,
             'iterations' => $iterations,
             'variantsPerComponent' => BenchmarkComponentConfig::getVariantsPerComponent(),
@@ -255,8 +328,8 @@ class ExportBenchmarks extends Command
         <h1 class="text-4xl font-bold text-gray-900 mb-4">TailwindMergeBoost Benchmarks</h1>
         <p class="text-lg text-gray-600 mb-8">
             Performance comparison between 
-            <a href="https://github.com/gehrisandro/tailwind-merge-laravel" class="text-blue-600 hover:underline">tailwind-merge-laravel</a> 
-            and TailwindMergeBoost.
+            <a href="https://github.com/gehrisandro/tailwind-merge-laravel" class="text-blue-600 hover:underline">tailwind-merge-laravel</a>, 
+            TailwindMergeOnce, and TailwindMergeBoost.
         </p>
         
         <div class="grid gap-6 md:grid-cols-2">
