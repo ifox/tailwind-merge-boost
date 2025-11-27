@@ -193,8 +193,8 @@ Route::get('/benchmark', function () {
     
     // Reset stats after warmup
     $once->resetStats();
-    $boost->resetStats();
     $boost->clearCache();
+    $boost->resetStats();
 
     // Benchmark each category
     foreach ($testCases as $category => $cases) {
