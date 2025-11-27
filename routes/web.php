@@ -40,19 +40,13 @@ Route::get('/component-benchmark', function () {
         $twmEnd = hrtime(true);
         $twmTime = ($twmEnd - $twmStart) / 1_000_000;
         
-        // TailwindMergeOnce timing - rebind the container so the Facade uses our instance
+        // TailwindMergeOnce timing (bind fresh instance for each component)
         $once = new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store());
-        // Forget any existing resolved instances
-        app()->forgetInstance(TailwindMergeContract::class);
-        app()->forgetInstance('tailwind-merge');
-        // Bind our TailwindMergeOnce instance
-        app()->instance(TailwindMergeContract::class, $once);
-        app()->instance('tailwind-merge', $once);
-        
+        app()->singleton(TailwindMergeContract::class, fn () => $once);
         $onceStart = hrtime(true);
         foreach ($variants as $config) {
             for ($r = 0; $r < $repeatsPerRender; $r++) {
-                View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => 'Content']))->render();
+                View::make("components.ui.{$name}", array_merge($config, ['merger' => 'once', 'slot' => 'Content']))->render();
             }
         }
         $onceEnd = hrtime(true);
@@ -62,15 +56,7 @@ Route::get('/component-benchmark', function () {
         $onceMergeCalls = $once->getMergeCalls();
         $onceActualCalls = $once->getActualMergeCalls();
         $onceCacheHits = $once->getCacheHits();
-        
-        // Restore original TailwindMerge binding
         app()->forgetInstance(TailwindMergeContract::class);
-        app()->forgetInstance('tailwind-merge');
-        app()->singleton(TailwindMergeContract::class, static fn () => \TailwindMerge\TailwindMerge::factory()
-            ->withConfiguration(config('tailwind-merge', []))
-            ->withCache(app('cache')->store())
-            ->make());
-        app()->alias(TailwindMergeContract::class, 'tailwind-merge');
         
         // TailwindMergeBoost timing
         $boost->clearCache();
@@ -109,34 +95,18 @@ Route::get('/component-benchmark', function () {
         ];
         
         // Render one variant of each component for display
+        app()->singleton(TailwindMergeContract::class, fn () => new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store()));
         $componentVariants = [];
         foreach ($variants as $index => $config) {
-            // Bind TailwindMergeOnce for 'once' rendering
-            $onceDisplay = new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store());
-            app()->forgetInstance(TailwindMergeContract::class);
-            app()->forgetInstance('tailwind-merge');
-            app()->instance(TailwindMergeContract::class, $onceDisplay);
-            app()->instance('tailwind-merge', $onceDisplay);
-            $onceHtml = View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => ucfirst($name)]))->render();
-            
-            // Restore original for 'twm' rendering
-            app()->forgetInstance(TailwindMergeContract::class);
-            app()->forgetInstance('tailwind-merge');
-            app()->singleton(TailwindMergeContract::class, static fn () => \TailwindMerge\TailwindMerge::factory()
-                ->withConfiguration(config('tailwind-merge', []))
-                ->withCache(app('cache')->store())
-                ->make());
-            app()->alias(TailwindMergeContract::class, 'tailwind-merge');
-            $twmHtml = View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => ucfirst($name)]))->render();
-            
             $componentVariants[] = [
                 'variant' => $index + 1,
                 'class' => $config['class'],
-                'twm' => $twmHtml,
-                'once' => $onceHtml,
+                'twm' => View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => ucfirst($name)]))->render(),
+                'once' => View::make("components.ui.{$name}", array_merge($config, ['merger' => 'once', 'slot' => ucfirst($name)]))->render(),
                 'boost' => View::make("components.ui.{$name}", array_merge($config, ['merger' => 'boost', 'slot' => ucfirst($name)]))->render(),
             ];
         }
+        app()->forgetInstance(TailwindMergeContract::class);
         
         $components[$name] = [
             'name' => $name,
