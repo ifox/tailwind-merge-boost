@@ -18,4 +18,3 @@ class TailwindMergeOnce extends TailwindMerge
         return once(fn () => parent::merge(...$args));
     }
 }
-
