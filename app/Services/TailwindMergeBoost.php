@@ -28,6 +28,21 @@ class TailwindMergeBoost
     private int $cacheSize = 500;
 
     /**
+     * Count of total merge calls.
+     */
+    private int $mergeCalls = 0;
+
+    /**
+     * Count of cache hits.
+     */
+    private int $cacheHits = 0;
+
+    /**
+     * Count of cache stores (actual processing done).
+     */
+    private int $cacheStores = 0;
+
+    /**
      * Pre-compiled regex patterns for performance.
      */
     private const SIZE_PATTERN = '/^-?[\d.]+\s*(px|em|rem|%|vw|vh|vmin|vmax|ch|ex|cm|mm|in|pt|pc|svh|svw|dvh|dvw|lvh|lvw)$/';
@@ -385,6 +400,7 @@ class TailwindMergeBoost
      */
     public function merge(string|array ...$args): string
     {
+        $this->mergeCalls++;
         $input = $this->flattenInput($args);
 
         if (trim($input) === '') {
@@ -394,6 +410,8 @@ class TailwindMergeBoost
         // Check cache first
         $cacheKey = $this->getCacheKey($input);
         if (isset($this->classGroupCache[$cacheKey])) {
+            $this->cacheHits++;
+
             return $this->classGroupCache[$cacheKey];
         }
 
@@ -401,6 +419,7 @@ class TailwindMergeBoost
 
         // Store in cache with size limit
         $this->storeInCache($cacheKey, $result);
+        $this->cacheStores++;
 
         return $result;
     }
@@ -815,6 +834,40 @@ class TailwindMergeBoost
     public function clearCache(): void
     {
         $this->classGroupCache = [];
+    }
+
+    /**
+     * Reset all stats (counters).
+     */
+    public function resetStats(): void
+    {
+        $this->mergeCalls = 0;
+        $this->cacheHits = 0;
+        $this->cacheStores = 0;
+    }
+
+    /**
+     * Get the total number of merge calls.
+     */
+    public function getMergeCalls(): int
+    {
+        return $this->mergeCalls;
+    }
+
+    /**
+     * Get the number of cache hits.
+     */
+    public function getCacheHits(): int
+    {
+        return $this->cacheHits;
+    }
+
+    /**
+     * Get the number of cache stores (actual processing done).
+     */
+    public function getCacheStores(): int
+    {
+        return $this->cacheStores;
     }
 
     /**

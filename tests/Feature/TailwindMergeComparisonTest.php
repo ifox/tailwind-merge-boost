@@ -3,21 +3,26 @@
 declare(strict_types=1);
 
 use App\Services\TailwindMergeBoost;
+use App\Services\TailwindMergeOnce;
 use TailwindMerge\Laravel\Facades\TailwindMerge;
+use TailwindMerge\Support\Config;
 
 /*
 |--------------------------------------------------------------------------
 | Tailwind Merge Comparison Tests
 |--------------------------------------------------------------------------
 |
-| These tests compare the behavior of both TailwindMerge (original package)
-| and TailwindMergeBoost (efficient implementation) to ensure consistent
-| output across various Tailwind CSS class merging scenarios.
+| These tests compare the behavior of TailwindMerge (original package),
+| TailwindMergeOnce (with once() helper), and TailwindMergeBoost (efficient
+| implementation) to ensure consistent output across various Tailwind CSS
+| class merging scenarios.
 |
 */
 
 beforeEach(function () {
     $this->boost = new TailwindMergeBoost();
+    Config::setAdditionalConfig(config('tailwind-merge', []));
+    $this->once = new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store());
 });
 
 /*
@@ -31,10 +36,13 @@ describe('basic class conflicts', function () {
         $input = 'p-4 p-6';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('p-6');
+        expect($onceResult)->toBe('p-6');
         expect($boostResult)->toBe('p-6');
+        expect($onceResult)->toBe($twmResult);
         expect($boostResult)->toBe($twmResult);
     });
 
@@ -42,10 +50,13 @@ describe('basic class conflicts', function () {
         $input = 'mt-2 mt-4';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('mt-4');
+        expect($onceResult)->toBe('mt-4');
         expect($boostResult)->toBe('mt-4');
+        expect($onceResult)->toBe($twmResult);
         expect($boostResult)->toBe($twmResult);
     });
 
@@ -53,10 +64,13 @@ describe('basic class conflicts', function () {
         $input = 'mt-2 mb-4';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toContain('mt-2');
         expect($twmResult)->toContain('mb-4');
+        expect($onceResult)->toContain('mt-2');
+        expect($onceResult)->toContain('mb-4');
         expect($boostResult)->toContain('mt-2');
         expect($boostResult)->toContain('mb-4');
     });
@@ -65,9 +79,11 @@ describe('basic class conflicts', function () {
         $input = 'bg-red-500 bg-blue-500';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('bg-blue-500');
+        expect($onceResult)->toBe('bg-blue-500');
         expect($boostResult)->toBe('bg-blue-500');
     });
 
@@ -75,9 +91,11 @@ describe('basic class conflicts', function () {
         $input = 'text-red-500 text-blue-500';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('text-blue-500');
+        expect($onceResult)->toBe('text-blue-500');
         expect($boostResult)->toBe('text-blue-500');
     });
 
@@ -85,9 +103,11 @@ describe('basic class conflicts', function () {
         $input = 'w-4 w-full';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('w-full');
+        expect($onceResult)->toBe('w-full');
         expect($boostResult)->toBe('w-full');
     });
 
@@ -95,9 +115,11 @@ describe('basic class conflicts', function () {
         $input = 'h-4 h-screen';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('h-screen');
+        expect($onceResult)->toBe('h-screen');
         expect($boostResult)->toBe('h-screen');
     });
 });
@@ -113,9 +135,11 @@ describe('display and position classes', function () {
         $input = 'block flex';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('flex');
+        expect($onceResult)->toBe('flex');
         expect($boostResult)->toBe('flex');
     });
 
@@ -123,9 +147,11 @@ describe('display and position classes', function () {
         $input = 'block inline-block flex grid';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('grid');
+        expect($onceResult)->toBe('grid');
         expect($boostResult)->toBe('grid');
     });
 
@@ -133,9 +159,11 @@ describe('display and position classes', function () {
         $input = 'static relative absolute';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('absolute');
+        expect($onceResult)->toBe('absolute');
         expect($boostResult)->toBe('absolute');
     });
 
@@ -143,9 +171,11 @@ describe('display and position classes', function () {
         $input = 'visible invisible';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('invisible');
+        expect($onceResult)->toBe('invisible');
         expect($boostResult)->toBe('invisible');
     });
 });
@@ -161,9 +191,11 @@ describe('modifier handling', function () {
         $input = 'hover:bg-red-500 hover:bg-blue-500';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('hover:bg-blue-500');
+        expect($onceResult)->toBe('hover:bg-blue-500');
         expect($boostResult)->toBe('hover:bg-blue-500');
     });
 
@@ -171,10 +203,13 @@ describe('modifier handling', function () {
         $input = 'hover:bg-red-500 focus:bg-blue-500';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toContain('hover:bg-red-500');
         expect($twmResult)->toContain('focus:bg-blue-500');
+        expect($onceResult)->toContain('hover:bg-red-500');
+        expect($onceResult)->toContain('focus:bg-blue-500');
         expect($boostResult)->toContain('hover:bg-red-500');
         expect($boostResult)->toContain('focus:bg-blue-500');
     });
@@ -183,9 +218,11 @@ describe('modifier handling', function () {
         $input = 'md:p-4 md:p-8';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('md:p-8');
+        expect($onceResult)->toBe('md:p-8');
         expect($boostResult)->toBe('md:p-8');
     });
 
@@ -193,10 +230,13 @@ describe('modifier handling', function () {
         $input = 'md:p-4 lg:p-8';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toContain('md:p-4');
         expect($twmResult)->toContain('lg:p-8');
+        expect($onceResult)->toContain('md:p-4');
+        expect($onceResult)->toContain('lg:p-8');
         expect($boostResult)->toContain('md:p-4');
         expect($boostResult)->toContain('lg:p-8');
     });
@@ -205,9 +245,11 @@ describe('modifier handling', function () {
         $input = 'dark:text-white dark:text-gray-100';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('dark:text-gray-100');
+        expect($onceResult)->toBe('dark:text-gray-100');
         expect($boostResult)->toBe('dark:text-gray-100');
     });
 
@@ -215,9 +257,11 @@ describe('modifier handling', function () {
         $input = 'hover:md:bg-red-500 hover:md:bg-blue-500';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('hover:md:bg-blue-500');
+        expect($onceResult)->toBe('hover:md:bg-blue-500');
         expect($boostResult)->toBe('hover:md:bg-blue-500');
     });
 });
@@ -233,9 +277,11 @@ describe('important modifier handling', function () {
         $input = '!p-4 !p-8';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('!p-8');
+        expect($onceResult)->toBe('!p-8');
         expect($boostResult)->toBe('!p-8');
     });
 
@@ -243,10 +289,13 @@ describe('important modifier handling', function () {
         $input = 'p-4 !p-8';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toContain('p-4');
         expect($twmResult)->toContain('!p-8');
+        expect($onceResult)->toContain('p-4');
+        expect($onceResult)->toContain('!p-8');
         expect($boostResult)->toContain('p-4');
         expect($boostResult)->toContain('!p-8');
     });
@@ -263,9 +312,11 @@ describe('negative value handling', function () {
         $input = '-mt-4 -mt-8';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('-mt-8');
+        expect($onceResult)->toBe('-mt-8');
         expect($boostResult)->toBe('-mt-8');
     });
 
@@ -273,10 +324,13 @@ describe('negative value handling', function () {
         $input = 'mt-4 -mb-4';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toContain('mt-4');
         expect($twmResult)->toContain('-mb-4');
+        expect($onceResult)->toContain('mt-4');
+        expect($onceResult)->toContain('-mb-4');
         expect($boostResult)->toContain('mt-4');
         expect($boostResult)->toContain('-mb-4');
     });
@@ -293,15 +347,23 @@ describe('complex scenarios', function () {
         $input = 'flex flex-col items-center justify-between p-4 p-6 bg-white shadow-lg rounded-xl';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
-        // Both should remove p-4 and keep p-6
+        // All should remove p-4 and keep p-6
         expect($twmResult)->toContain('flex');
         expect($twmResult)->toContain('flex-col');
         expect($twmResult)->toContain('items-center');
         expect($twmResult)->toContain('justify-between');
         expect($twmResult)->toContain('p-6');
         expect($twmResult)->not->toContain('p-4');
+
+        expect($onceResult)->toContain('flex');
+        expect($onceResult)->toContain('flex-col');
+        expect($onceResult)->toContain('items-center');
+        expect($onceResult)->toContain('justify-between');
+        expect($onceResult)->toContain('p-6');
+        expect($onceResult)->not->toContain('p-4');
 
         expect($boostResult)->toContain('flex');
         expect($boostResult)->toContain('flex-col');
@@ -315,15 +377,23 @@ describe('complex scenarios', function () {
         $input = 'mt-4 mb-2 px-6 py-4 mt-8 px-8';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
-        // Both should resolve conflicts
+        // All should resolve conflicts
         expect($twmResult)->toContain('mt-8');
         expect($twmResult)->not->toContain('mt-4');
         expect($twmResult)->toContain('px-8');
         expect($twmResult)->not->toContain('px-6');
         expect($twmResult)->toContain('mb-2');
         expect($twmResult)->toContain('py-4');
+
+        expect($onceResult)->toContain('mt-8');
+        expect($onceResult)->not->toContain('mt-4');
+        expect($onceResult)->toContain('px-8');
+        expect($onceResult)->not->toContain('px-6');
+        expect($onceResult)->toContain('mb-2');
+        expect($onceResult)->toContain('py-4');
 
         expect($boostResult)->toContain('mt-8');
         expect($boostResult)->not->toContain('mt-4');
@@ -337,13 +407,19 @@ describe('complex scenarios', function () {
         $input = 'flex flex-col items-center justify-between p-4 bg-white shadow-lg rounded-xl hover:shadow-xl transition-shadow duration-300 mx-auto max-w-md w-full space-y-4 p-8 bg-gray-100';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
-        // Both should resolve p-4/p-8 and bg-white/bg-gray-100 conflicts
+        // All should resolve p-4/p-8 and bg-white/bg-gray-100 conflicts
         expect($twmResult)->toContain('p-8');
         expect($twmResult)->not->toContain('p-4');
         expect($twmResult)->toContain('bg-gray-100');
         expect($twmResult)->not->toContain('bg-white');
+
+        expect($onceResult)->toContain('p-8');
+        expect($onceResult)->not->toContain('p-4');
+        expect($onceResult)->toContain('bg-gray-100');
+        expect($onceResult)->not->toContain('bg-white');
 
         expect($boostResult)->toContain('p-8');
         expect($boostResult)->not->toContain('p-4');
@@ -535,9 +611,11 @@ describe('edge cases', function () {
         $input = '';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('');
+        expect($onceResult)->toBe('');
         expect($boostResult)->toBe('');
     });
 
@@ -545,9 +623,11 @@ describe('edge cases', function () {
         $input = '   ';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toBe('');
+        expect($onceResult)->toBe('');
         expect($boostResult)->toBe('');
     });
 
@@ -555,11 +635,16 @@ describe('edge cases', function () {
         $input = 'custom-class p-4 another-custom';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toContain('custom-class');
         expect($twmResult)->toContain('p-4');
         expect($twmResult)->toContain('another-custom');
+
+        expect($onceResult)->toContain('custom-class');
+        expect($onceResult)->toContain('p-4');
+        expect($onceResult)->toContain('another-custom');
 
         expect($boostResult)->toContain('custom-class');
         expect($boostResult)->toContain('p-4');
@@ -570,11 +655,16 @@ describe('edge cases', function () {
         $input = 'flex items-center space-x-4';
 
         $twmResult = TailwindMerge::merge($input);
+        $onceResult = $this->once->merge($input);
         $boostResult = $this->boost->merge($input);
 
         expect($twmResult)->toContain('flex');
         expect($twmResult)->toContain('items-center');
         expect($twmResult)->toContain('space-x-4');
+
+        expect($onceResult)->toContain('flex');
+        expect($onceResult)->toContain('items-center');
+        expect($onceResult)->toContain('space-x-4');
 
         expect($boostResult)->toContain('flex');
         expect($boostResult)->toContain('items-center');

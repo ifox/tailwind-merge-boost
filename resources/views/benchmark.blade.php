@@ -10,7 +10,7 @@
     <div class="max-w-6xl mx-auto px-4">
         <div class="text-center mb-12">
             <h1 class="text-4xl font-bold text-gray-900 mb-4">
-                TailwindMerge vs TailwindMergeBoost
+                TailwindMerge vs TailwindMergeOnce vs TailwindMergeBoost
             </h1>
             <p class="text-lg text-gray-600">
                 Performance comparison of Tailwind CSS class mergers
@@ -20,28 +20,73 @@
         <!-- Summary Card -->
         <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
             <h2 class="text-2xl font-semibold text-gray-800 mb-6">Summary</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-6">
                 <div class="bg-blue-50 rounded-xl p-6 text-center">
                     <p class="text-sm font-medium text-blue-600 uppercase tracking-wide">TailwindMerge</p>
                     <p class="text-3xl font-bold text-blue-900 mt-2">{{ number_format($totalTwm, 2) }} ms</p>
                 </div>
+                <div class="bg-purple-50 rounded-xl p-6 text-center">
+                    <p class="text-sm font-medium text-purple-600 uppercase tracking-wide">TailwindMergeOnce</p>
+                    <p class="text-3xl font-bold text-purple-900 mt-2">{{ number_format($totalOnce, 2) }} ms</p>
+                    <p class="text-sm text-purple-600 mt-1">{{ number_format($totalOnceSpeedup, 2) }}x</p>
+                </div>
                 <div class="bg-green-50 rounded-xl p-6 text-center">
                     <p class="text-sm font-medium text-green-600 uppercase tracking-wide">TailwindMergeBoost</p>
                     <p class="text-3xl font-bold text-green-900 mt-2">{{ number_format($totalBoost, 2) }} ms</p>
+                    <p class="text-sm text-green-600 mt-1">{{ number_format($totalBoostSpeedup, 2) }}x</p>
                 </div>
-                <div class="{{ $totalSpeedup > 1 ? 'bg-emerald-50' : 'bg-yellow-50' }} rounded-xl p-6 text-center">
-                    <p class="text-sm font-medium {{ $totalSpeedup > 1 ? 'text-emerald-600' : 'text-yellow-600' }} uppercase tracking-wide">Speedup</p>
-                    <p class="text-3xl font-bold {{ $totalSpeedup > 1 ? 'text-emerald-900' : 'text-yellow-900' }} mt-2">
-                        {{ number_format($totalSpeedup, 2) }}x
-                        @if($totalSpeedup > 1)
+                <div class="{{ $totalOnceSpeedup > 1 ? 'bg-purple-50' : 'bg-yellow-50' }} rounded-xl p-6 text-center">
+                    <p class="text-sm font-medium {{ $totalOnceSpeedup > 1 ? 'text-purple-600' : 'text-yellow-600' }} uppercase tracking-wide">Once Speedup</p>
+                    <p class="text-3xl font-bold {{ $totalOnceSpeedup > 1 ? 'text-purple-900' : 'text-yellow-900' }} mt-2">
+                        {{ number_format($totalOnceSpeedup, 2) }}x
+                        @if($totalOnceSpeedup > 1)
+                            <span class="text-lg">⚡</span>
+                        @endif
+                    </p>
+                </div>
+                <div class="{{ $totalBoostSpeedup > 1 ? 'bg-emerald-50' : 'bg-yellow-50' }} rounded-xl p-6 text-center">
+                    <p class="text-sm font-medium {{ $totalBoostSpeedup > 1 ? 'text-emerald-600' : 'text-yellow-600' }} uppercase tracking-wide">Boost Speedup</p>
+                    <p class="text-3xl font-bold {{ $totalBoostSpeedup > 1 ? 'text-emerald-900' : 'text-yellow-900' }} mt-2">
+                        {{ number_format($totalBoostSpeedup, 2) }}x
+                        @if($totalBoostSpeedup > 1)
                             <span class="text-lg">⚡</span>
                         @endif
                     </p>
                 </div>
             </div>
             <p class="text-center text-gray-500 mt-6">
-                Based on {{ number_format($iterations) }} iterations per test case
+                Based on {{ number_format($iterations) }} iterations × {{ number_format($repeatsPerCase) }} repeats per test case
             </p>
+        </div>
+
+        <!-- Cache Statistics -->
+        <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6">Cache Statistics</h2>
+            <p class="text-gray-600 mb-4">Each input is repeated {{ number_format($repeatsPerCase) }} times per iteration to demonstrate memoization benefits.</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div class="bg-gray-50 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-4">Total Merge Calls</h3>
+                    <p class="text-3xl font-bold text-gray-900">{{ number_format($totalCacheStats['totalCalls']) }}</p>
+                </div>
+                <div class="bg-purple-50 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-purple-700 mb-4">TailwindMergeOnce</h3>
+                    <div class="space-y-2">
+                        <p class="text-sm text-purple-600">Merge calls: <span class="font-bold">{{ number_format($totalCacheStats['onceMergeCalls']) }}</span></p>
+                        <p class="text-sm text-purple-600">Actual processing: <span class="font-bold">{{ number_format($totalCacheStats['onceActualCalls']) }}</span></p>
+                        <p class="text-sm text-purple-600">Cache hits: <span class="font-bold text-purple-800">{{ number_format($totalCacheStats['onceCacheHits']) }}</span></p>
+                        <p class="text-sm text-purple-800 font-semibold">Hit rate: {{ number_format(($totalCacheStats['onceCacheHits'] / max($totalCacheStats['onceMergeCalls'], 1)) * 100, 1) }}%</p>
+                    </div>
+                </div>
+                <div class="bg-green-50 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-green-700 mb-4">TailwindMergeBoost</h3>
+                    <div class="space-y-2">
+                        <p class="text-sm text-green-600">Merge calls: <span class="font-bold">{{ number_format($totalCacheStats['boostMergeCalls']) }}</span></p>
+                        <p class="text-sm text-green-600">Cache stores: <span class="font-bold">{{ number_format($totalCacheStats['boostCacheStores']) }}</span></p>
+                        <p class="text-sm text-green-600">Cache hits: <span class="font-bold text-green-800">{{ number_format($totalCacheStats['boostCacheHits']) }}</span></p>
+                        <p class="text-sm text-green-800 font-semibold">Hit rate: {{ number_format(($totalCacheStats['boostCacheHits'] / max($totalCacheStats['boostMergeCalls'], 1)) * 100, 1) }}%</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Results Table -->
@@ -53,24 +98,38 @@
                         <tr class="border-b-2 border-gray-200">
                             <th class="text-left py-4 px-4 font-semibold text-gray-700">Category</th>
                             <th class="text-right py-4 px-4 font-semibold text-gray-700">TailwindMerge</th>
+                            <th class="text-right py-4 px-4 font-semibold text-gray-700">TailwindMergeOnce</th>
                             <th class="text-right py-4 px-4 font-semibold text-gray-700">TailwindMergeBoost</th>
-                            <th class="text-right py-4 px-4 font-semibold text-gray-700">Speedup</th>
                             <th class="text-center py-4 px-4 font-semibold text-gray-700">Winner</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($results as $category => $result)
+                        @php
+                            $fastest = min($result['twm'], $result['once'], $result['boost']);
+                            $winner = match($fastest) {
+                                $result['boost'] => 'boost',
+                                $result['once'] => 'once',
+                                default => 'twm',
+                            };
+                        @endphp
                         <tr class="border-b border-gray-100 hover:bg-gray-50">
                             <td class="py-4 px-4 font-medium text-gray-900 capitalize">{{ $category }}</td>
                             <td class="py-4 px-4 text-right text-gray-600">{{ number_format($result['twm'], 2) }} ms</td>
-                            <td class="py-4 px-4 text-right text-gray-600">{{ number_format($result['boost'], 2) }} ms</td>
-                            <td class="py-4 px-4 text-right font-semibold {{ $result['speedup'] > 1 ? 'text-green-600' : 'text-yellow-600' }}">
-                                {{ number_format($result['speedup'], 2) }}x
+                            <td class="py-4 px-4 text-right font-semibold {{ $result['onceSpeedup'] > 1 ? 'text-purple-600' : 'text-yellow-600' }}">
+                                {{ number_format($result['once'], 2) }} ms ({{ number_format($result['onceSpeedup'], 2) }}x)
+                            </td>
+                            <td class="py-4 px-4 text-right font-semibold {{ $result['boostSpeedup'] > 1 ? 'text-green-600' : 'text-yellow-600' }}">
+                                {{ number_format($result['boost'], 2) }} ms ({{ number_format($result['boostSpeedup'], 2) }}x)
                             </td>
                             <td class="py-4 px-4 text-center">
-                                @if($result['speedup'] > 1)
+                                @if($winner === 'boost')
                                     <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
                                         ⚡ Boost
+                                    </span>
+                                @elseif($winner === 'once')
+                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                                        ⚡ Once
                                     </span>
                                 @else
                                     <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
@@ -101,6 +160,10 @@
                             <span class="text-xs font-medium text-blue-600 uppercase">TailwindMerge Output</span>
                             <code class="block text-sm text-blue-800 mt-1 break-all">{{ $example['twm'] }}</code>
                         </div>
+                        <div class="bg-purple-50 rounded-lg p-3">
+                            <span class="text-xs font-medium text-purple-600 uppercase">TailwindMergeOnce Output</span>
+                            <code class="block text-sm text-purple-800 mt-1 break-all">{{ $example['once'] }}</code>
+                        </div>
                         <div class="bg-green-50 rounded-lg p-3">
                             <span class="text-xs font-medium text-green-600 uppercase">TailwindMergeBoost Output</span>
                             <code class="block text-sm text-green-800 mt-1 break-all">{{ $example['boost'] }}</code>
@@ -117,8 +180,9 @@
             <div class="space-y-4">
                 @foreach($results as $category => $result)
                 @php
-                    $maxTime = max($result['twm'], $result['boost']);
+                    $maxTime = max($result['twm'], $result['once'], $result['boost']);
                     $twmWidth = ($result['twm'] / $maxTime) * 100;
+                    $onceWidth = ($result['once'] / $maxTime) * 100;
                     $boostWidth = ($result['boost'] / $maxTime) * 100;
                 @endphp
                 <div class="mb-6">
@@ -130,6 +194,15 @@
                                 <div class="bg-blue-500 h-full rounded-full flex items-center justify-end pr-2"
                                      style="width: {{ $twmWidth }}%">
                                     <span class="text-xs text-white font-medium">{{ number_format($result['twm'], 1) }} ms</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="w-32 text-sm text-gray-500">Once</span>
+                            <div class="flex-1 bg-gray-200 rounded-full h-6 overflow-hidden">
+                                <div class="bg-purple-500 h-full rounded-full flex items-center justify-end pr-2"
+                                     style="width: {{ $onceWidth }}%">
+                                    <span class="text-xs text-white font-medium">{{ number_format($result['once'], 1) }} ms</span>
                                 </div>
                             </div>
                         </div>
