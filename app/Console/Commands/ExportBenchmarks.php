@@ -104,9 +104,13 @@ class ExportBenchmarks extends Command
             ],
         ];
 
-        $iterations = 500;
+        // Number of times to repeat each case within a single request
+        // This shows the benefit of once() memoization
+        $repeatsPerCase = 100;
+        $iterations = 5;
         $boost = new TailwindMergeBoost();
         $results = [];
+        $cacheStats = [];
 
         // Warmup
         foreach ($testCases as $cases) {
@@ -127,40 +131,61 @@ class ExportBenchmarks extends Command
 
         // Benchmark each category
         foreach ($testCases as $category => $cases) {
-            // TailwindMerge
+            // TailwindMerge - same case repeated multiple times
             $twmStart = hrtime(true);
             for ($i = 0; $i < $iterations; $i++) {
                 foreach ($cases as $case) {
-                    TailwindMerge::merge($case);
+                    // Repeat the same case multiple times to simulate multiple renders
+                    for ($r = 0; $r < $repeatsPerCase; $r++) {
+                        TailwindMerge::merge($case);
+                    }
                 }
             }
             $twmEnd = hrtime(true);
             $twmTime = ($twmEnd - $twmStart) / 1_000_000;
 
-            // TailwindMergeOnce (bind fresh instance)
-            $this->bindTailwindMergeOnce();
+            // TailwindMergeOnce (create fresh instance for fair comparison)
+            $once = new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store());
+            
             $onceStart = hrtime(true);
             for ($i = 0; $i < $iterations; $i++) {
                 foreach ($cases as $case) {
-                    app(TailwindMergeContract::class)->merge($case);
+                    // Repeat the same case multiple times - once() will memoize
+                    for ($r = 0; $r < $repeatsPerCase; $r++) {
+                        $once->merge($case);
+                    }
                 }
             }
             $onceEnd = hrtime(true);
             $onceTime = ($onceEnd - $onceStart) / 1_000_000;
+
+            // Store cache stats for Once
+            $onceMergeCalls = $once->getMergeCalls();
+            $onceActualCalls = $once->getActualMergeCalls();
+            $onceCacheHits = $once->getCacheHits();
             $this->unbindTailwindMergeOnce();
 
             // Clear boost cache for fair comparison
             $boost->clearCache();
+            $boost->resetStats();
 
             // TailwindMergeBoost
             $boostStart = hrtime(true);
             for ($i = 0; $i < $iterations; $i++) {
                 foreach ($cases as $case) {
-                    $boost->merge($case);
+                    // Repeat the same case multiple times - internal cache will help
+                    for ($r = 0; $r < $repeatsPerCase; $r++) {
+                        $boost->merge($case);
+                    }
                 }
             }
             $boostEnd = hrtime(true);
             $boostTime = ($boostEnd - $boostStart) / 1_000_000;
+
+            // Store cache stats for Boost
+            $boostMergeCalls = $boost->getMergeCalls();
+            $boostCacheHits = $boost->getCacheHits();
+            $boostCacheStores = $boost->getCacheStores();
 
             $results[$category] = [
                 'twm' => $twmTime,
@@ -169,12 +194,33 @@ class ExportBenchmarks extends Command
                 'onceSpeedup' => $twmTime / max($onceTime, 0.001),
                 'boostSpeedup' => $twmTime / max($boostTime, 0.001),
             ];
+
+            $cacheStats[$category] = [
+                'totalCalls' => count($cases) * $iterations * $repeatsPerCase,
+                'onceMergeCalls' => $onceMergeCalls,
+                'onceActualCalls' => $onceActualCalls,
+                'onceCacheHits' => $onceCacheHits,
+                'boostMergeCalls' => $boostMergeCalls,
+                'boostCacheHits' => $boostCacheHits,
+                'boostCacheStores' => $boostCacheStores,
+            ];
         }
 
         // Calculate totals
         $totalTwm = array_sum(array_column($results, 'twm'));
         $totalOnce = array_sum(array_column($results, 'once'));
         $totalBoost = array_sum(array_column($results, 'boost'));
+
+        // Calculate total cache stats
+        $totalCacheStats = [
+            'totalCalls' => array_sum(array_column($cacheStats, 'totalCalls')),
+            'onceMergeCalls' => array_sum(array_column($cacheStats, 'onceMergeCalls')),
+            'onceActualCalls' => array_sum(array_column($cacheStats, 'onceActualCalls')),
+            'onceCacheHits' => array_sum(array_column($cacheStats, 'onceCacheHits')),
+            'boostMergeCalls' => array_sum(array_column($cacheStats, 'boostMergeCalls')),
+            'boostCacheHits' => array_sum(array_column($cacheStats, 'boostCacheHits')),
+            'boostCacheStores' => array_sum(array_column($cacheStats, 'boostCacheStores')),
+        ];
 
         // Get example outputs
         $this->bindTailwindMergeOnce();
@@ -192,12 +238,15 @@ class ExportBenchmarks extends Command
 
         $html = View::make('benchmark', [
             'results' => $results,
+            'cacheStats' => $cacheStats,
+            'totalCacheStats' => $totalCacheStats,
             'totalTwm' => $totalTwm,
             'totalOnce' => $totalOnce,
             'totalBoost' => $totalBoost,
             'totalOnceSpeedup' => $totalTwm / max($totalOnce, 0.001),
             'totalBoostSpeedup' => $totalTwm / max($totalBoost, 0.001),
             'iterations' => $iterations,
+            'repeatsPerCase' => $repeatsPerCase,
             'examples' => $examples,
             'exportedAt' => now()->toIso8601String(),
         ])->render();
@@ -213,47 +262,63 @@ class ExportBenchmarks extends Command
     {
         $this->info('Running component benchmarks...');
         
-        $iterations = 4;
+        // For component benchmarks, render each component multiple times to show once() memoization benefit
+        $repeatsPerRender = 100;
         $boost = app(TailwindMergeBoost::class);
         
         $componentConfigs = BenchmarkComponentConfig::getConfigs();
         
         $componentResults = [];
         $components = [];
+        $cacheStats = [];
         
         foreach ($componentConfigs as $name => $variants) {
-            // TailwindMerge timing
+            // TailwindMerge timing - render each variant 100 times
+            $twmMergeCalls = count($variants) * $repeatsPerRender;
             $twmStart = hrtime(true);
-            for ($i = 0; $i < $iterations; $i++) {
-                foreach ($variants as $config) {
+            foreach ($variants as $config) {
+                for ($r = 0; $r < $repeatsPerRender; $r++) {
                     View::make("components.ui.{$name}", array_merge($config, ['merger' => 'twm', 'slot' => 'Content']))->render();
                 }
             }
             $twmEnd = hrtime(true);
             $twmTime = ($twmEnd - $twmStart) / 1_000_000;
 
-            // TailwindMergeOnce timing (bind fresh instance)
-            $this->bindTailwindMergeOnce();
+            // TailwindMergeOnce timing (bind fresh instance for each component)
+            $once = new TailwindMergeOnce(Config::getMergedConfig(), app('cache')->store());
+            $this->laravel->singleton(TailwindMergeContract::class, fn () => $once);
+            
             $onceStart = hrtime(true);
-            for ($i = 0; $i < $iterations; $i++) {
-                foreach ($variants as $config) {
+            foreach ($variants as $config) {
+                for ($r = 0; $r < $repeatsPerRender; $r++) {
                     View::make("components.ui.{$name}", array_merge($config, ['merger' => 'once', 'slot' => 'Content']))->render();
                 }
             }
             $onceEnd = hrtime(true);
             $onceTime = ($onceEnd - $onceStart) / 1_000_000;
+            
+            // Capture cache stats for Once (in-memory memoization)
+            $onceMergeCalls = $once->getMergeCalls();
+            $onceActualCalls = $once->getActualMergeCalls();
+            $onceCacheHits = $once->getCacheHits();
             $this->unbindTailwindMergeOnce();
             
             // TailwindMergeBoost timing
             $boost->clearCache();
+            $boost->resetStats();
             $boostStart = hrtime(true);
-            for ($i = 0; $i < $iterations; $i++) {
-                foreach ($variants as $config) {
+            foreach ($variants as $config) {
+                for ($r = 0; $r < $repeatsPerRender; $r++) {
                     View::make("components.ui.{$name}", array_merge($config, ['merger' => 'boost', 'slot' => 'Content']))->render();
                 }
             }
             $boostEnd = hrtime(true);
             $boostTime = ($boostEnd - $boostStart) / 1_000_000;
+            
+            // Capture cache stats for Boost (in-memory array cache)
+            $boostMergeCalls = $boost->getMergeCalls();
+            $boostCacheHits = $boost->getCacheHits();
+            $boostCacheStores = $boost->getCacheStores();
             
             $componentResults[$name] = [
                 'twm' => $twmTime,
@@ -262,6 +327,20 @@ class ExportBenchmarks extends Command
                 'onceSpeedup' => $twmTime / max($onceTime, 0.001),
                 'boostSpeedup' => $twmTime / max($boostTime, 0.001),
                 'variants' => count($variants),
+            ];
+            
+            // TailwindMerge uses external cache store (database/file/redis) - estimate based on unique variants
+            $cacheStats[$name] = [
+                'totalRenders' => count($variants) * $repeatsPerRender,
+                'twmMergeCalls' => $twmMergeCalls,
+                'twmCacheStores' => count($variants),
+                'twmCacheHits' => $twmMergeCalls - count($variants),
+                'onceMergeCalls' => $onceMergeCalls,
+                'onceActualCalls' => $onceActualCalls,
+                'onceCacheHits' => $onceCacheHits,
+                'boostMergeCalls' => $boostMergeCalls,
+                'boostCacheHits' => $boostCacheHits,
+                'boostCacheStores' => $boostCacheStores,
             ];
             
             // Render all variants for display
@@ -287,10 +366,26 @@ class ExportBenchmarks extends Command
         $twmTime = array_sum(array_column($componentResults, 'twm'));
         $onceTime = array_sum(array_column($componentResults, 'once'));
         $boostTime = array_sum(array_column($componentResults, 'boost'));
-        $totalComponents = count($componentConfigs) * BenchmarkComponentConfig::getVariantsPerComponent() * $iterations;
+        $totalComponents = count($componentConfigs) * BenchmarkComponentConfig::getVariantsPerComponent() * $repeatsPerRender;
+        
+        // Calculate total cache stats
+        $totalCacheStats = [
+            'totalRenders' => array_sum(array_column($cacheStats, 'totalRenders')),
+            'twmMergeCalls' => array_sum(array_column($cacheStats, 'twmMergeCalls')),
+            'twmCacheStores' => array_sum(array_column($cacheStats, 'twmCacheStores')),
+            'twmCacheHits' => array_sum(array_column($cacheStats, 'twmCacheHits')),
+            'onceMergeCalls' => array_sum(array_column($cacheStats, 'onceMergeCalls')),
+            'onceActualCalls' => array_sum(array_column($cacheStats, 'onceActualCalls')),
+            'onceCacheHits' => array_sum(array_column($cacheStats, 'onceCacheHits')),
+            'boostMergeCalls' => array_sum(array_column($cacheStats, 'boostMergeCalls')),
+            'boostCacheHits' => array_sum(array_column($cacheStats, 'boostCacheHits')),
+            'boostCacheStores' => array_sum(array_column($cacheStats, 'boostCacheStores')),
+        ];
         
         $html = View::make('component-benchmark', [
             'componentResults' => $componentResults,
+            'cacheStats' => $cacheStats,
+            'totalCacheStats' => $totalCacheStats,
             'components' => $components,
             'twmTime' => $twmTime,
             'onceTime' => $onceTime,
@@ -298,7 +393,7 @@ class ExportBenchmarks extends Command
             'onceSpeedup' => $twmTime / max($onceTime, 0.001),
             'boostSpeedup' => $twmTime / max($boostTime, 0.001),
             'totalComponents' => $totalComponents,
-            'iterations' => $iterations,
+            'repeatsPerRender' => $repeatsPerRender,
             'variantsPerComponent' => BenchmarkComponentConfig::getVariantsPerComponent(),
             'exportedAt' => now()->toIso8601String(),
         ])->render();
@@ -346,6 +441,15 @@ class ExportBenchmarks extends Command
                     Real-world component rendering benchmark with 25 UI components and 10 variants each.
                 </p>
             </a>
+        </div>
+        
+        <div class="mt-8 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <h3 class="text-lg font-semibold text-amber-800 mb-2">⚠️ Important Notice</h3>
+            <p class="text-amber-700">
+                <strong>TailwindMergeBoost</strong> is an experimental implementation and does <strong>not</strong> have full feature parity with tailwind-merge-laravel. 
+                Many edge cases are not yet supported. For production use, we recommend <strong>TailwindMergeOnce</strong> which wraps the official TailwindMerge 
+                with <code class="bg-amber-100 px-1 rounded">once()</code> memoization for both correctness and performance.
+            </p>
         </div>
         
         <div class="mt-12 text-center text-gray-500">

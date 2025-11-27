@@ -1,14 +1,27 @@
 # Tailwind Merge Boost
 
-A Laravel application for benchmarking the [tailwind-merge-laravel](https://github.com/gehrisandro/tailwind-merge-laravel) package against an alternative, more efficient implementation of a Tailwind CSS class merger.
+A Laravel application for benchmarking the [tailwind-merge-laravel](https://github.com/gehrisandro/tailwind-merge-laravel) package against alternative implementations of Tailwind CSS class mergers.
 
 ## Overview
 
 This project provides:
 
-1. **TailwindMergeBoost** - A high-performance alternative implementation for merging Tailwind CSS classes
-2. **Benchmark CLI Command** - Compare performance between the two implementations
-3. **Benchmark Web UI** - Visual comparison of benchmark results
+1. **TailwindMergeOnce** - A production-ready wrapper around `tailwind-merge-laravel` that adds in-memory memoization using PHP's `once()` helper for significant performance gains
+2. **TailwindMergeBoost** - An experimental high-performance implementation (⚠️ **not production-ready** - see [Test Status](#test-status))
+3. **Benchmark CLI Command** - Compare performance between the implementations
+4. **Benchmark Web UI** - Visual comparison of benchmark results
+
+## Test Status
+
+⚠️ **TailwindMergeBoost is NOT production-ready.** It does not have full feature parity with `tailwind-merge-laravel`.
+
+To see which edge cases are not yet supported, run:
+
+```bash
+php artisan test --filter=BoostFeatureParity
+```
+
+**Recommendation:** For production use, use **TailwindMergeOnce** which wraps the official TailwindMerge with `once()` memoization for both correctness and performance.
 
 ## Installation
 
@@ -58,7 +71,9 @@ Then open http://localhost:8000/benchmark in your browser.
 
 ## TailwindMergeBoost
 
-The `TailwindMergeBoost` class provides an efficient alternative to `tailwind-merge-laravel`. It uses:
+> ⚠️ **Warning:** TailwindMergeBoost is an experimental implementation and does **not** have full feature parity with `tailwind-merge-laravel`. Many edge cases are not yet supported. For production use, we recommend **TailwindMergeOnce** instead.
+
+The `TailwindMergeBoost` class provides a fast but incomplete alternative to `tailwind-merge-laravel`. It uses:
 
 - Lookup tables for common class patterns
 - Simple string operations instead of complex object creation
