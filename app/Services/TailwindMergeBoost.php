@@ -162,11 +162,11 @@ class TailwindMergeBoost
         '/^placeholder-/' => 'placeholder',
         // Gradient positions - must be before color patterns
         '/^from-\d+%$/' => 'gradient-from-pos',
-        '/^from-\[[^\]]+%\]$/' => 'gradient-from-pos',
+        '/^from-\[[0-9.]+%\]$/' => 'gradient-from-pos',
         '/^via-\d+%$/' => 'gradient-via-pos',
-        '/^via-\[[^\]]+%\]$/' => 'gradient-via-pos',
+        '/^via-\[[0-9.]+%\]$/' => 'gradient-via-pos',
         '/^to-\d+%$/' => 'gradient-to-pos',
-        '/^to-\[[^\]]+%\]$/' => 'gradient-to-pos',
+        '/^to-\[[0-9.]+%\]$/' => 'gradient-to-pos',
         // Gradient colors - includes arbitrary
         '/^from-/' => 'gradient-from',
         '/^via-/' => 'gradient-via',
@@ -782,7 +782,7 @@ class TailwindMergeBoost
             'outline' => $isSize ? 'outline-width' : ($isColor ? 'outline-color' : 'outline-arbitrary'),
             'stroke' => $isSize ? 'stroke-width' : ($isColor ? 'stroke-color' : 'stroke-arbitrary'),
             'text' => $isSize ? 'text-size' : ($isColor ? 'text-color' : 'text-arbitrary'),
-            'bg' => $isImage ? 'bg-image' : ($isSize ? 'bg-size' : ($isColor ? 'bg-color' : ($isPercentage ? 'bg-size' : 'bg-arbitrary'))),
+            'bg' => $this->getBgGroup($isImage, $isSize, $isColor, $isPercentage),
             'p' => 'padding',
             'pt' => 'padding-t',
             'pr' => 'padding-r',
@@ -880,6 +880,26 @@ class TailwindMergeBoost
         }
 
         return null;
+    }
+
+    /**
+     * Get the appropriate bg group based on arbitrary value type.
+     */
+    private function getBgGroup(bool $isImage, bool $isSize, bool $isColor, bool $isPercentage): string
+    {
+        if ($isImage) {
+            return 'bg-image';
+        }
+        if ($isSize) {
+            return 'bg-size';
+        }
+        if ($isColor) {
+            return 'bg-color';
+        }
+        if ($isPercentage) {
+            return 'bg-size';
+        }
+        return 'bg-arbitrary';
     }
 
     /**
