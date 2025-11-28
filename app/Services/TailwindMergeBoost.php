@@ -103,8 +103,12 @@ class TailwindMergeBoost
         '/^gap-x-/' => 'gap-x',
         '/^gap-y-/' => 'gap-y',
         '/^gap-/' => 'gap',
-        // Text size (must be before text color) - includes arbitrary values
-        '/^text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)$/' => 'text-size',
+        // Text size (must be before text color) - includes arbitrary values and custom sizes like 3.5xl
+        '/^text-(xs|sm|base|lg|xl|\d+(\.\d+)?xl)$/' => 'text-size',
+        // Text with postfix modifier (e.g., text-lg/7) - font-size with line-height
+        '/^text-(xs|sm|base|lg|xl|\d+(\.\d+)?xl)\//' => 'text-size-leading',
+        // Text wrap classes
+        '/^text-(wrap|nowrap|pretty|balance)$/' => 'text-wrap',
         // Text color (general pattern for colors) - includes arbitrary
         '/^text-/' => 'text-color',
         // Border width (must be before border color) - border, border-0, border-2, border-4, border-8
@@ -144,8 +148,9 @@ class TailwindMergeBoost
         '/^bg-/' => 'bg-color',
         // Fill - includes arbitrary
         '/^fill-/' => 'fill',
-        // Stroke width - includes arbitrary
+        // Stroke width - includes arbitrary numbers
         '/^stroke-(0|1|2)$/' => 'stroke-width',
+        '/^stroke-\[\d+\]$/' => 'stroke-width',
         // Stroke color - includes arbitrary
         '/^stroke-/' => 'stroke-color',
         // Shadow - includes arbitrary
@@ -155,7 +160,14 @@ class TailwindMergeBoost
         '/^decoration-/' => 'decoration',
         '/^divide-/' => 'divide',
         '/^placeholder-/' => 'placeholder',
-        // Gradient - includes arbitrary
+        // Gradient positions - must be before color patterns
+        '/^from-\d+%$/' => 'gradient-from-pos',
+        '/^from-\[[0-9.]+%\]$/' => 'gradient-from-pos',
+        '/^via-\d+%$/' => 'gradient-via-pos',
+        '/^via-\[[0-9.]+%\]$/' => 'gradient-via-pos',
+        '/^to-\d+%$/' => 'gradient-to-pos',
+        '/^to-\[[0-9.]+%\]$/' => 'gradient-to-pos',
+        // Gradient colors - includes arbitrary
         '/^from-/' => 'gradient-from',
         '/^via-/' => 'gradient-via',
         '/^to-/' => 'gradient-to',
@@ -168,7 +180,21 @@ class TailwindMergeBoost
         '/^whitespace-/' => 'whitespace',
         '/^break-/' => 'break',
         '/^hyphens-/' => 'hyphens',
-        // Border radius - includes arbitrary
+        // Border radius - includes arbitrary and side-specific patterns
+        '/^rounded-ss-/' => 'rounded-ss',
+        '/^rounded-se-/' => 'rounded-se',
+        '/^rounded-ee-/' => 'rounded-ee',
+        '/^rounded-es-/' => 'rounded-es',
+        '/^rounded-s-/' => 'rounded-s',
+        '/^rounded-e-/' => 'rounded-e',
+        '/^rounded-tl-/' => 'rounded-tl',
+        '/^rounded-tr-/' => 'rounded-tr',
+        '/^rounded-br-/' => 'rounded-br',
+        '/^rounded-bl-/' => 'rounded-bl',
+        '/^rounded-t-/' => 'rounded-t',
+        '/^rounded-r-/' => 'rounded-r',
+        '/^rounded-b-/' => 'rounded-b',
+        '/^rounded-l-/' => 'rounded-l',
         '/^rounded/' => 'rounded',
         // Transforms - includes arbitrary
         '/^scale-/' => 'scale',
@@ -226,12 +252,16 @@ class TailwindMergeBoost
         '/^snap-/' => 'snap',
         // Other - includes arbitrary
         '/^opacity-/' => 'opacity',
+        '/^mix-blend-/' => 'mix-blend',
+        '/^bg-blend-/' => 'bg-blend',
         '/^cursor-/' => 'cursor',
         '/^select-/' => 'select',
         '/^resize/' => 'resize',
+        '/^list-image-/' => 'list-image',
         '/^list-/' => 'list',
         '/^appearance-/' => 'appearance',
         '/^pointer-events-/' => 'pointer-events',
+        '/^touch-pan-/' => 'touch-pan',
         '/^touch-/' => 'touch',
         '/^will-change-/' => 'will-change',
         '/^content-/' => 'content',
@@ -242,6 +272,7 @@ class TailwindMergeBoost
         '/^table-/' => 'table',
         '/^caption-/' => 'caption',
         '/^line-clamp-/' => 'line-clamp',
+        '/^forced-color-adjust-/' => 'forced-color-adjust',
     ];
 
     /**
@@ -363,10 +394,21 @@ class TailwindMergeBoost
         'divide-y-reverse' => 'divide-y-reverse',
         // Ring inset
         'ring-inset' => 'ring-inset',
-        // Touch
+        // Touch - specific classes for conflict handling
+        'touch-auto' => 'touch',
+        'touch-none' => 'touch',
+        'touch-manipulation' => 'touch',
+        'touch-pan-x' => 'touch-pan-x',
+        'touch-pan-left' => 'touch-pan-x',
+        'touch-pan-right' => 'touch-pan-x',
+        'touch-pan-y' => 'touch-pan-y',
+        'touch-pan-up' => 'touch-pan-y',
+        'touch-pan-down' => 'touch-pan-y',
         'touch-pinch-zoom' => 'touch-pz',
         // Background image
         'bg-none' => 'bg-image',
+        // List image
+        'list-image-none' => 'list-image',
     ];
 
     /**
@@ -381,16 +423,44 @@ class TailwindMergeBoost
         'inset-x' => ['right', 'left'],
         'inset-y' => ['top', 'bottom'],
         'gap' => ['gap-x', 'gap-y'],
+        // Padding conflicts - both directions
         'padding' => ['padding-x', 'padding-y', 'padding-t', 'padding-r', 'padding-b', 'padding-l', 'padding-s', 'padding-e'],
+        'padding-x' => ['padding-l', 'padding-r'],
+        'padding-y' => ['padding-t', 'padding-b'],
         'margin' => ['margin-x', 'margin-y', 'margin-t', 'margin-r', 'margin-b', 'margin-l', 'margin-s', 'margin-e'],
+        'margin-x' => ['margin-l', 'margin-r'],
+        'margin-y' => ['margin-t', 'margin-b'],
         'rounded' => ['rounded-t', 'rounded-r', 'rounded-b', 'rounded-l', 'rounded-tl', 'rounded-tr', 'rounded-br', 'rounded-bl', 'rounded-s', 'rounded-e', 'rounded-ss', 'rounded-se', 'rounded-ee', 'rounded-es'],
+        'rounded-s' => ['rounded-ss', 'rounded-es'],
+        'rounded-e' => ['rounded-se', 'rounded-ee'],
         'border-width' => ['border-side-width'],
         'border-color' => ['border-t-color', 'border-r-color', 'border-b-color', 'border-l-color', 'border-x-color', 'border-y-color'],
         'size' => ['width', 'height'],
         'scroll-m' => ['scroll-mx', 'scroll-my', 'scroll-ms', 'scroll-me', 'scroll-mt', 'scroll-mr', 'scroll-mb', 'scroll-ml'],
         'scroll-p' => ['scroll-px', 'scroll-py', 'scroll-ps', 'scroll-pe', 'scroll-pt', 'scroll-pr', 'scroll-pb', 'scroll-pl'],
-        'bg-image' => ['bg-color'],
+        // Background image/gradient conflicts
+        'bg-image' => ['bg-color', 'bg-gradient'],
+        'bg-gradient' => ['bg-image', 'bg-color'],
         'bg-color' => ['bg-image'],
+        // bg-size is a separate group (no conflicts with bg-color/bg-image)
+        // bg-cover, bg-contain, bg-auto all in bg-size group
+        // Touch conflicts - bidirectional: touch-auto/touch-none/touch-manipulation conflict with all touch classes and vice versa
+        'touch' => ['touch-pan-x', 'touch-pan-y', 'touch-pz'],
+        'touch-pan-x' => ['touch'],
+        'touch-pan-y' => ['touch'],
+        'touch-pz' => ['touch'],
+        // line-clamp overrides overflow and display
+        'line-clamp' => ['display', 'overflow'],
+        // text with line-height modifier conflicts with leading
+        'text-size-leading' => ['leading'],
+        // Font variant numeric - normal-nums resets all other fvn classes
+        // The other fvn classes also reset normal-nums (bidirectional)
+        'fvn-normal' => ['fvn-ordinal', 'fvn-slashed-zero', 'fvn-figure', 'fvn-spacing', 'fvn-fraction'],
+        'fvn-ordinal' => ['fvn-normal'],
+        'fvn-slashed-zero' => ['fvn-normal'],
+        'fvn-figure' => ['fvn-normal'],
+        'fvn-spacing' => ['fvn-normal'],
+        'fvn-fraction' => ['fvn-normal'],
     ];
 
     /**
@@ -499,43 +569,45 @@ class TailwindMergeBoost
      */
     private function parseClass(string $class): ?array
     {
-        // Handle standalone arbitrary properties like [color:red] or hover:[color:red]
-        // These are different from utility classes with arbitrary values like ring-[#ff0000]
-        // Standalone arbitrary properties start with '[' (after any modifiers) and contain ':'
-        $bracketPos = strpos($class, '[');
-        $isArbitraryProperty = false;
+        // Parse the class to extract modifiers and base class
+        // Modifiers can be:
+        // 1. Simple: hover, focus, md, lg, etc.
+        // 2. Arbitrary variants: [&>*], [&[data-open]], etc.
+        // Base class can be:
+        // 1. Regular: p-4, text-red-500, etc.
+        // 2. Arbitrary property: [color:red], [--my-var:2rem], etc.
         
-        if ($bracketPos !== false) {
-            // Check if this is a standalone arbitrary property (starts with [ after modifiers)
-            // vs a utility class with arbitrary value (has a prefix before [)
-            $afterBracket = substr($class, $bracketPos);
-            // Arbitrary properties have format [property:value]
-            // Arbitrary values have format prefix-[value]
-            if (preg_match(self::ARBITRARY_PROPERTY_PATTERN, $afterBracket)) {
-                $isArbitraryProperty = true;
-            }
-        }
+        $modifiers = [];
+        $baseClass = '';
+        $current = '';
+        $bracketDepth = 0;
+        $i = 0;
+        $len = strlen($class);
         
-        if ($isArbitraryProperty) {
-            if ($bracketPos > 0) {
-                // There are modifiers before the bracket, e.g., hover:[color:red]
-                $beforeBracket = substr($class, 0, $bracketPos);
-                $baseClass = substr($class, $bracketPos);
-                
-                // Remove trailing colon from modifiers if present
-                $beforeBracket = rtrim($beforeBracket, ':');
-                $modifiers = $beforeBracket !== '' ? explode(':', $beforeBracket) : [];
+        while ($i < $len) {
+            $char = $class[$i];
+            
+            if ($char === '[') {
+                $bracketDepth++;
+                $current .= $char;
+            } elseif ($char === ']') {
+                $bracketDepth--;
+                $current .= $char;
+            } elseif ($char === ':' && $bracketDepth === 0) {
+                // This colon separates a modifier from the rest
+                // But only if we're not inside brackets
+                if ($current !== '') {
+                    $modifiers[] = $current;
+                }
+                $current = '';
             } else {
-                // No modifiers, just the arbitrary property like [color:red]
-                $baseClass = $class;
-                $modifiers = [];
+                $current .= $char;
             }
-        } else {
-            // Standard class handling - extract modifiers (responsive, hover, etc.)
-            $parts = explode(':', $class);
-            $baseClass = array_pop($parts);
-            $modifiers = $parts;
+            $i++;
         }
+        
+        // Whatever's left is the base class
+        $baseClass = $current;
 
         // Handle important modifier
         $hasImportant = false;
@@ -551,9 +623,10 @@ class TailwindMergeBoost
             return null;
         }
 
-        // Sort modifiers for consistent ordering
-        sort($modifiers);
-        $modifierId = implode(':', $modifiers);
+        // Build modifier ID - sort only regular modifiers, keep arbitrary variants in position
+        // This matches Tailwind behavior where hover:focus = focus:hover but hover:[&>*] != [&>*]:hover
+        $sortedModifiers = $this->sortModifiers($modifiers);
+        $modifierId = implode(':', $sortedModifiers);
         if ($hasImportant) {
             $modifierId .= '!';
         }
@@ -562,6 +635,58 @@ class TailwindMergeBoost
             'modifierId' => $modifierId,
             'groupId' => $groupId,
         ];
+    }
+    
+    /**
+     * Sort modifiers for consistent comparison.
+     * Regular modifiers (hover, focus, md, etc.) are sorted alphabetically within each segment.
+     * Arbitrary variants ([&>*], [&_div], etc.) act as segment boundaries - 
+     * they're kept in their original relative positions and regular modifiers
+     * between them are sorted within each segment.
+     * 
+     * Example:
+     * - hover:focus:[&>*]:active:disabled → focus:hover:[&>*]:active:disabled
+     * - [&>*]:hover:focus → [&>*]:focus:hover
+     * - hover:[&>*]:focus → hover:[&>*]:focus (no regular modifiers to sort in segments)
+     * 
+     * @param array<string> $modifiers
+     * @return array<string>
+     */
+    private function sortModifiers(array $modifiers): array
+    {
+        // If no modifiers or just one, return as-is
+        if (count($modifiers) <= 1) {
+            return $modifiers;
+        }
+        
+        // Split into segments by arbitrary variants
+        // Each segment contains regular modifiers, and arbitrary variants separate them
+        $result = [];
+        $currentSegment = [];
+        
+        foreach ($modifiers as $modifier) {
+            if (str_starts_with($modifier, '[')) {
+                // Arbitrary variant - sort current segment and add it
+                if (!empty($currentSegment)) {
+                    sort($currentSegment);
+                    $result = array_merge($result, $currentSegment);
+                    $currentSegment = [];
+                }
+                // Add the arbitrary variant as-is
+                $result[] = $modifier;
+            } else {
+                // Regular modifier - add to current segment
+                $currentSegment[] = $modifier;
+            }
+        }
+        
+        // Don't forget the last segment
+        if (!empty($currentSegment)) {
+            sort($currentSegment);
+            $result = array_merge($result, $currentSegment);
+        }
+        
+        return $result;
     }
 
     /**
@@ -580,16 +705,20 @@ class TailwindMergeBoost
             $checkClass = substr($baseClass, 1);
         }
 
+        // Check if this is an arbitrary value class (contains brackets with prefix-[value] format)
         // Handle special cases for arbitrary values that need type detection
         if (preg_match('/^([a-z-]+)-\[(.+)\]$/', $checkClass, $matches)) {
             $prefix = $matches[1];
             $arbitraryValue = $matches[2];
             
-            // Determine the group based on the prefix and arbitrary value type
+            // For arbitrary value classes, we need to determine the group based on 
+            // the prefix and the type of the arbitrary value (size, color, etc.)
+            // We do NOT use pattern matching here because patterns like /^text-/
+            // would match all text-[...] classes regardless of value type
             return $this->getArbitraryClassGroup($prefix, $arbitraryValue);
         }
 
-        // Check pattern matches
+        // Check pattern matches for non-arbitrary classes
         foreach (self::$classGroupPatterns as $pattern => $groupId) {
             if (preg_match($pattern, $checkClass)) {
                 return $groupId;
@@ -615,12 +744,25 @@ class TailwindMergeBoost
      */
     private function getArbitraryClassGroup(string $prefix, string $arbitraryValue): ?string
     {
+        // Check for explicit type hints in arbitrary values like [length:...], [color:...], etc.
+        $typeHint = null;
+        if (preg_match('/^([a-z-]+):/', $arbitraryValue, $typeMatches)) {
+            $typeHint = $typeMatches[1];
+        }
+        
         // Determine if the arbitrary value is a color (only hex colors recognized for compatibility)
-        $isColor = $this->isArbitraryColor($arbitraryValue);
+        $isColor = $typeHint === 'color' || $this->isArbitraryColor($arbitraryValue);
         // Determine if the arbitrary value is a size/length
-        $isSize = $this->isArbitrarySize($arbitraryValue);
-        // Determine if the arbitrary value is a URL (for bg-image)
-        $isUrl = (bool) preg_match(self::URL_PATTERN, $arbitraryValue);
+        $isSize = $typeHint === 'length' || $this->isArbitrarySize($arbitraryValue);
+        // Determine if the arbitrary value is a URL or gradient (for bg-image)
+        $isImage = $typeHint === 'url' || $typeHint === 'image' || 
+                   (bool) preg_match(self::URL_PATTERN, $arbitraryValue) ||
+                   (bool) preg_match('/^linear-gradient\(/', $arbitraryValue) ||
+                   (bool) preg_match('/^radial-gradient\(/', $arbitraryValue) ||
+                   (bool) preg_match('/^conic-gradient\(/', $arbitraryValue);
+        // Determine if the arbitrary value is a percentage (for gradient positions)
+        $isPercentage = $typeHint === 'percentage' || 
+                        (bool) preg_match('/^[\d.]+%$/', $arbitraryValue);
         
         // For utilities that can have either color or size values,
         // only merge if we can definitively identify the type.
@@ -640,7 +782,7 @@ class TailwindMergeBoost
             'outline' => $isSize ? 'outline-width' : ($isColor ? 'outline-color' : 'outline-arbitrary'),
             'stroke' => $isSize ? 'stroke-width' : ($isColor ? 'stroke-color' : 'stroke-arbitrary'),
             'text' => $isSize ? 'text-size' : ($isColor ? 'text-color' : 'text-arbitrary'),
-            'bg' => $isUrl ? 'bg-image' : ($isColor ? 'bg-color' : 'bg-arbitrary'),
+            'bg' => $this->getBgGroup($isImage, $isSize, $isColor, $isPercentage),
             'p' => 'padding',
             'pt' => 'padding-t',
             'pr' => 'padding-r',
@@ -692,9 +834,9 @@ class TailwindMergeBoost
             'skew-x' => 'skew-x',
             'skew-y' => 'skew-y',
             'scale' => 'scale',
-            'from' => 'gradient-from',
-            'via' => 'gradient-via',
-            'to' => 'gradient-to',
+            'from' => $isPercentage ? 'gradient-from-pos' : 'gradient-from',
+            'via' => $isPercentage ? 'gradient-via-pos' : 'gradient-via',
+            'to' => $isPercentage ? 'gradient-to-pos' : 'gradient-to',
             'opacity' => 'opacity',
             'shadow' => 'shadow',
             'blur' => 'blur',
@@ -738,6 +880,26 @@ class TailwindMergeBoost
         }
 
         return null;
+    }
+
+    /**
+     * Get the appropriate bg group based on arbitrary value type.
+     */
+    private function getBgGroup(bool $isImage, bool $isSize, bool $isColor, bool $isPercentage): string
+    {
+        if ($isImage) {
+            return 'bg-image';
+        }
+        if ($isSize) {
+            return 'bg-size';
+        }
+        if ($isColor) {
+            return 'bg-color';
+        }
+        if ($isPercentage) {
+            return 'bg-size';
+        }
+        return 'bg-arbitrary';
     }
 
     /**
